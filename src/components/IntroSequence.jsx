@@ -1,223 +1,341 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { createIntroBackground } from './introBackground.js'
 import './IntroSequence.css'
 
+gsap.registerPlugin(ScrollTrigger)
+
 /**
- * Intro cinematográfica do EVOM, em 3 atos:
- *   Ato 1  vídeo fullscreen (mãos -> coração)
- *   Ato 2  hard cut para o fundo vinho (sem fade, sem dissolve)
- *   Ato 3  pingentes E V O M entrando em sequência + "Eu Venci o Mundo."
- *   Saída  fade/slide-up revelando o site
+ * Intro do EVOM — inteiramente dirigida pelo scroll (scrollytelling).
+ * Nada aqui roda por timer ou autoplay: o motor é sempre o progresso (0→1) do
+ * ScrollTrigger sobre uma seção alta com o palco em sticky.
  *
- * Roda uma única vez por visita. Chama onFinish() quando termina (ou quando é pulada),
- * que é o gancho pra página montar a hero.
+ *   0 ──────────── 0.55 ── 0.65 ─────────────── 1
+ *   │ ATO 1          │ ATO 2 │ ATO 3             │
+ *   │ vídeo scrubado │ corte │ E V O M + verso   │
+ *
+ * Tudo é scrubado, então rolar pra trás desfaz na ordem inversa.
  */
 
-// Flag em memória (escopo de módulo): remounts do React não reproduzem a intro de novo.
-// Só vira true quando a intro de fato termina ou é pulada.
-let hasPlayed = false
+const ACT1_END = 0.55 // fim do scrub do vídeo
+const ACT2_END = 0.65 // fim do corte cinematográfico
+const ACT2_LEN = ACT2_END - ACT1_END
+const SEG = (1 - ACT2_END) / 5 // E, V, O, M, texto
 
+const BG_WAKE = 0.45 // progresso em que a cena Three.js começa a renderizar
 const DEFAULT_LETTERS = ['/e.png', '/v.png', '/o.png', '/m.png']
 
-// --- Ato 3, em ms -----------------------------------------------------------
-const LETTER_STEP = 300 // intervalo entre o início de uma letra e o da próxima
-const LETTER_DUR = 420 // duração do scale-up de cada letra
-const MANIFESTO_AT = LETTER_STEP * 3 + LETTER_DUR // entra quando o M assenta (~1260ms)
-const MANIFESTO_DUR = 620
-const HOLD = 900 // pausa com tudo estático pro usuário ler
-const ACT3_TOTAL = MANIFESTO_AT + MANIFESTO_DUR + HOLD
-
-const EXIT_DUR = 900 // saída natural
-const SKIP_EXIT_DUR = 320 // saída ao clicar em "Pular intro"
-const STATIC_HOLD = 1800 // hold do modo prefers-reduced-motion
-
-const CUT_LEAD = 0.25 // s antes do fim do vídeo em que o corte crava
-const VIDEO_LOAD_TIMEOUT = 4000 // se o vídeo nem começar a tocar, cai pro Ato 3
-const VIDEO_OVERRUN = 1200 // folga sobre o tempo restante, caso 'ended' não dispare
-const SKIP_AFTER = 1000 // botão "Pular intro" aparece depois de 1s
-
 export default function IntroSequence({
-  onFinish,
+  onIntroComplete,
+  onProgress,
   videoSrc = '/hero.mp4',
   letters = DEFAULT_LETTERS,
   manifesto = 'Eu Venci o Mundo.',
+  height = '400vh',
+  respectReducedMotion = true,
 }) {
-  const [reduced] = useState(
-    () =>
-      typeof window !== 'undefined' &&
+  // Atenção: no Windows, "Efeitos de animação" desligado (Configurações >
+  // Acessibilidade > Efeitos visuais) já faz o browser reportar `reduce` — e
+  // aí a intro inteira vira o estado final estático, sem scrub. É o
+  // comportamento correto, mas passe respectReducedMotion={false} pra forçar
+  // a versão completa quando estiver revisando a animação.
+  const [reduced] = useState(() => {
+    if (!respectReducedMotion || typeof window === 'undefined') return false
+    // Escotilha de revisão: ?motion=full força a intro completa em qualquer máquina.
+    if (new URLSearchParams(window.location.search).get('motion') === 'full') return false
+    return (
       typeof window.matchMedia === 'function' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  )
-
-  // 'video' -> 'letters' -> 'exit' -> 'done'
-  const [phase, setPhase] = useState(() => {
-    if (hasPlayed) return 'done'
-    return reduced ? 'letters' : 'video'
+    )
   })
   const [showSkip, setShowSkip] = useState(false)
-  const [exitMs, setExitMs] = useState(EXIT_DUR)
 
+  const rootRef = useRef(null)
+  const canvasRef = useRef(null)
+  const videoWrapRef = useRef(null)
   const videoRef = useRef(null)
-  const finishedRef = useRef(false)
+  const flashRef = useRef(null)
+  const noiseRef = useRef(null)
+  const lettersRef = useRef([])
+  const manifestoRef = useRef(null)
+  const rgbRedRef = useRef(null)
+  const rgbBlueRef = useRef(null)
 
-  const finish = useCallback(() => {
-    if (finishedRef.current) return
-    finishedRef.current = true
-    hasPlayed = true
-    setPhase('done')
-    onFinish?.()
-  }, [onFinish])
+  const completedRef = useRef(false)
 
-  // Ato 2: o corte. Trocar de fase já basta — o vídeo some no mesmo frame
-  // em que o vinho aparece, porque o vinho é o fundo do container.
-  const cutToLetters = useCallback(() => {
-    setPhase((p) => (p === 'video' ? 'letters' : p))
-  }, [])
+  const complete = useCallback(() => {
+    if (completedRef.current) return
+    completedRef.current = true
+    onIntroComplete?.()
+  }, [onIntroComplete])
 
-  const skip = useCallback(() => {
-    setExitMs(SKIP_EXIT_DUR)
-    setPhase((p) => (p === 'done' ? p : 'exit'))
-  }, [])
-
-  // Se a intro já rodou nesta visita, avisa a página na hora.
+  // Pré-carrega os pingentes assim que o componente monta — não depende mais de
+  // um Ato 1 com duração garantida, já que quem manda no tempo agora é o usuário.
   useEffect(() => {
-    if (phase === 'done') finish()
-  }, [phase, finish])
-
-  // Pré-carrega os pingentes durante o Ato 1 pra não piscarem no Ato 3.
-  useEffect(() => {
-    const imgs = letters.map((src) => {
+    const preloaded = letters.map((src) => {
       const img = new Image()
       img.src = src
       return img
     })
-    return () => imgs.forEach((img) => (img.src = ''))
+    return () => preloaded.forEach((img) => (img.src = ''))
   }, [letters])
 
-  // Trava o scroll enquanto a intro está na tela.
   useEffect(() => {
-    if (phase === 'done') return
-    const previous = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = previous
-    }
-  }, [phase])
+    const timer = setTimeout(() => setShowSkip(true), 800)
+    return () => clearTimeout(timer)
+  }, [])
 
-  // Botão "Pular intro".
+  // ----------------------------------------------------------- reduced motion
   useEffect(() => {
-    if (phase === 'done') return
-    const t = setTimeout(() => setShowSkip(true), SKIP_AFTER)
-    return () => clearTimeout(t)
-  }, [phase])
+    if (!reduced) return
+    // Estado final direto: sem scrub, sem vídeo, sem cena Three.js.
+    gsap.set([...lettersRef.current, manifestoRef.current].filter(Boolean), {
+      autoAlpha: 1,
+      scale: 1,
+      y: 0,
+    })
+    complete()
+  }, [reduced, complete])
 
-  // Ato 1: dispara o play e mantém um failsafe caso o vídeo não colabore
-  // (autoplay bloqueado, arquivo pesado, erro de rede). Enquanto ele não toca,
-  // o que está na tela já é o vinho do Ato 2 — nunca um frame branco.
+  // ------------------------------------------------------------------- scrub
   useEffect(() => {
-    if (phase !== 'video') return
+    if (reduced) return
+
+    const root = rootRef.current
     const video = videoRef.current
-    if (!video) return
+    if (!root || !video) return
 
-    let failsafe = setTimeout(cutToLetters, VIDEO_LOAD_TIMEOUT)
-    const onPlaying = () => {
-      clearTimeout(failsafe)
-      const remaining = Number.isFinite(video.duration)
-        ? (video.duration - video.currentTime) * 1000
-        : VIDEO_LOAD_TIMEOUT
-      failsafe = setTimeout(cutToLetters, remaining + VIDEO_OVERRUN)
+    let cancelled = false
+    let background = null
+    let ctx = null
+
+    const build = () => {
+      if (cancelled || ctx) return
+
+      background = createIntroBackground(canvasRef.current)
+
+      ctx = gsap.context(() => {
+        const duration =
+          Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 5
+
+        const tl = gsap.timeline({
+          defaults: { ease: 'none' },
+          scrollTrigger: {
+            trigger: root,
+            start: 'top top',
+            end: 'bottom bottom',
+            scrub: 0.6,
+            invalidateOnRefresh: true,
+            onUpdate: (self) => {
+              const p = self.progress
+              onProgress?.(p)
+              background?.setProgress(p)
+              if (p > BG_WAKE) background?.start()
+              else if (p < BG_WAKE - 0.05) background?.stop()
+              if (p >= 0.999) complete()
+            },
+          },
+        })
+
+        // ATO 1 — scrubbing puro: o scroll é o cabeçote do vídeo, não playback.
+        tl.to(video, { currentTime: duration, duration: ACT1_END }, 0)
+
+        // ATO 2 — o corte. Punch zoom + aberração cromática + flash + ruído,
+        // tudo dentro de 10% do scroll: entra, dá a porrada e sai.
+        tl.set(videoWrapRef.current, { filter: 'url(#evom-rgb-split)' }, ACT1_END)
+        tl.to(
+          videoWrapRef.current,
+          { scale: 1.38, duration: ACT2_LEN, ease: 'power3.in' },
+          ACT1_END
+        )
+        tl.to(rgbRedRef.current, { attr: { dx: 22, dy: -5 }, duration: ACT2_LEN * 0.7 }, ACT1_END)
+        tl.to(rgbBlueRef.current, { attr: { dx: -22, dy: 5 }, duration: ACT2_LEN * 0.7 }, ACT1_END)
+
+        tl.fromTo(
+          flashRef.current,
+          { autoAlpha: 0 },
+          { autoAlpha: 1, duration: ACT2_LEN * 0.55, ease: 'power2.in' },
+          ACT1_END
+        )
+        tl.to(
+          flashRef.current,
+          { autoAlpha: 0, duration: ACT2_LEN * 0.45, ease: 'power2.out' },
+          ACT1_END + ACT2_LEN * 0.55
+        )
+
+        tl.fromTo(
+          noiseRef.current,
+          { autoAlpha: 0 },
+          { autoAlpha: 0.28, duration: ACT2_LEN * 0.5 },
+          ACT1_END
+        )
+        tl.to(
+          noiseRef.current,
+          { autoAlpha: 0, duration: ACT2_LEN * 0.5 },
+          ACT1_END + ACT2_LEN * 0.5
+        )
+
+        // A cena Three.js sobe por baixo do flash: o vinho nunca chega chapado.
+        tl.fromTo(
+          canvasRef.current,
+          { autoAlpha: 0 },
+          { autoAlpha: 1, duration: ACT2_LEN * 0.6 },
+          ACT1_END + ACT2_LEN * 0.4
+        )
+
+        // Fim do corte: o vídeo sai de cena e leva o filtro junto.
+        tl.set(videoWrapRef.current, { autoAlpha: 0, filter: 'none' }, ACT2_END)
+
+        // ATO 3 — uma letra por sub-trecho, cada uma dentro do seu próprio slot
+        // (o layout já está montado, então crescer não empurra as vizinhas).
+        lettersRef.current.filter(Boolean).forEach((letter, index) => {
+          tl.fromTo(
+            letter,
+            { scale: 0.38, autoAlpha: 0 },
+            { scale: 1, autoAlpha: 1, duration: SEG, ease: 'back.out(1.6)' },
+            ACT2_END + index * SEG
+          )
+        })
+
+        tl.fromTo(
+          manifestoRef.current,
+          { y: 12, autoAlpha: 0 },
+          { y: 0, autoAlpha: 1, duration: SEG, ease: 'power2.out' },
+          ACT2_END + 4 * SEG
+        )
+      }, root)
+
+      ScrollTrigger.refresh()
     }
 
-    video.addEventListener('playing', onPlaying)
-    const played = video.play()
-    if (played && typeof played.catch === 'function') played.catch(cutToLetters)
+    // currentTime só pode ser escrito depois que os metadados carregam.
+    const onMeta = () => build()
+    if (video.readyState >= 1) {
+      build()
+    } else {
+      video.addEventListener('loadedmetadata', onMeta, { once: true })
+      video.addEventListener('error', onMeta, { once: true })
+    }
+
+    // iOS só libera o decode (e portanto o seek) depois de um play; play+pause
+    // imediato destrava o scrub sem nunca reproduzir de fato.
+    const primed = video.play()
+    if (primed && typeof primed.then === 'function') {
+      primed.then(() => video.pause()).catch(() => {})
+    }
 
     return () => {
-      clearTimeout(failsafe)
-      video.removeEventListener('playing', onPlaying)
+      cancelled = true
+      video.removeEventListener('loadedmetadata', onMeta)
+      video.removeEventListener('error', onMeta)
+      ctx?.revert()
+      background?.dispose()
     }
-  }, [phase, cutToLetters])
+  }, [reduced, complete, onProgress])
 
-  // Ato 3 -> saída -> site.
-  useEffect(() => {
-    if (phase !== 'letters') return
-    const t = setTimeout(() => setPhase('exit'), reduced ? STATIC_HOLD : ACT3_TOTAL)
-    return () => clearTimeout(t)
-  }, [phase, reduced])
-
-  useEffect(() => {
-    if (phase !== 'exit') return
-    const t = setTimeout(finish, reduced ? 200 : exitMs)
-    return () => clearTimeout(t)
-  }, [phase, exitMs, reduced, finish])
-
-  if (phase === 'done') return null
-
-  const handleTimeUpdate = (event) => {
-    const video = event.currentTarget
-    if (!video.duration || Number.isNaN(video.duration)) return
-    if (video.currentTime >= video.duration - CUT_LEAD) cutToLetters()
-  }
+  // Leva o usuário ao fim exato do trecho sticky — o documento segue dali.
+  const skip = useCallback(() => {
+    const root = rootRef.current
+    if (!root) return
+    const top =
+      root.getBoundingClientRect().top + window.scrollY + root.offsetHeight - window.innerHeight
+    window.scrollTo({ top, behavior: reduced ? 'auto' : 'smooth' })
+  }, [reduced])
 
   return (
-    <div
-      className={[
-        'evom-intro',
-        phase === 'exit' ? 'is-exiting' : '',
-        reduced ? 'is-static' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      style={{
-        '--evom-exit-dur': `${reduced ? 200 : exitMs}ms`,
-        '--evom-letter-dur': `${LETTER_DUR}ms`,
-        '--evom-manifesto-dur': `${MANIFESTO_DUR}ms`,
-        '--evom-manifesto-at': `${MANIFESTO_AT}ms`,
-      }}
+    <section
+      ref={rootRef}
+      className={`evom-intro${reduced ? ' is-static' : ''}`}
+      style={{ height: reduced ? '100vh' : height }}
     >
-      {phase === 'video' && (
-        <video
-          ref={videoRef}
-          className="evom-intro__video"
-          src={videoSrc}
-          autoPlay
-          muted
-          playsInline
-          preload="auto"
-          disablePictureInPicture
-          onTimeUpdate={handleTimeUpdate}
-          onEnded={cutToLetters}
-          onError={cutToLetters}
-        />
-      )}
+      <div className="evom-intro__stage">
+        <canvas ref={canvasRef} className="evom-intro__bg" aria-hidden="true" />
 
-      {phase !== 'video' && (
-        <div className="evom-intro__stage">
+        {!reduced && (
+          <div ref={videoWrapRef} className="evom-intro__video-wrap" aria-hidden="true">
+            <video
+              ref={videoRef}
+              className="evom-intro__video"
+              src={videoSrc}
+              muted
+              playsInline
+              preload="auto"
+              disablePictureInPicture
+            />
+          </div>
+        )}
+
+        <div ref={noiseRef} className="evom-intro__noise" aria-hidden="true" />
+        <div ref={flashRef} className="evom-intro__flash" aria-hidden="true" />
+
+        <div className="evom-intro__content">
           <div className="evom-intro__letters" aria-hidden="true">
             {letters.map((src, index) => (
-              <img
-                key={src}
-                className="evom-intro__letter"
-                style={{ animationDelay: `${index * LETTER_STEP}ms` }}
-                src={src}
-                alt=""
-                draggable="false"
-              />
+              <span className="evom-intro__slot" key={src}>
+                <img
+                  ref={(el) => {
+                    lettersRef.current[index] = el
+                  }}
+                  className="evom-intro__letter"
+                  src={src}
+                  alt=""
+                  draggable="false"
+                />
+              </span>
             ))}
           </div>
 
-          <p className="evom-intro__manifesto">{manifesto}</p>
+          <p ref={manifestoRef} className="evom-intro__manifesto" data-text={manifesto}>
+            {manifesto}
+          </p>
         </div>
-      )}
 
-      <button
-        type="button"
-        className={`evom-intro__skip${showSkip ? ' is-visible' : ''}`}
-        onClick={skip}
-        tabIndex={showSkip ? 0 : -1}
-        aria-hidden={!showSkip}
-      >
-        Pular intro
-      </button>
-    </div>
+        <button
+          type="button"
+          className={`evom-intro__skip${showSkip ? ' is-visible' : ''}`}
+          onClick={skip}
+          tabIndex={showSkip ? 0 : -1}
+        >
+          Pular intro
+        </button>
+      </div>
+
+      {/* Split RGB do Ato 2. Só é aplicado ao vídeo durante o corte — manter o
+          filtro ligado no Ato 1 inteiro custaria repaint a cada frame. */}
+      <svg className="evom-intro__defs" aria-hidden="true" focusable="false">
+        <filter
+          id="evom-rgb-split"
+          x="-15%"
+          y="-15%"
+          width="130%"
+          height="130%"
+          colorInterpolationFilters="sRGB"
+        >
+          <feColorMatrix
+            in="SourceGraphic"
+            type="matrix"
+            values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"
+            result="channelR"
+          />
+          <feColorMatrix
+            in="SourceGraphic"
+            type="matrix"
+            values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"
+            result="channelG"
+          />
+          <feColorMatrix
+            in="SourceGraphic"
+            type="matrix"
+            values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"
+            result="channelB"
+          />
+          <feOffset ref={rgbRedRef} in="channelR" dx="0" dy="0" result="shiftR" />
+          <feOffset ref={rgbBlueRef} in="channelB" dx="0" dy="0" result="shiftB" />
+          <feBlend in="shiftR" in2="channelG" mode="screen" result="rg" />
+          <feBlend in="rg" in2="shiftB" mode="screen" />
+        </filter>
+      </svg>
+    </section>
   )
 }
