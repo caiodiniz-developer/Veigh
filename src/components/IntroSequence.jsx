@@ -44,13 +44,19 @@ const holdThenSnap = (p) => (p < 1 ? 0 : 1)
 // cursor apagado, o que lê como bug em vez de intenção.
 const caretBlink = (p) => (p < 0.7 ? 0 : 1)
 
-const BG_WAKE = 0.45 // progresso em que a cena Three.js começa a renderizar
+// Só acorda a cena Three.js perto do corte: durante o scrub do vídeo ela ficaria
+// disputando frame com a decodificação, que é o trecho mais caro da intro.
+const BG_WAKE = 0.52 // progresso em que a cena Three.js começa a renderizar
 const DEFAULT_LETTERS = ['/e.png', '/v.png', '/o.png', '/m.png']
 
 export default function IntroSequence({
   onIntroComplete,
   onProgress,
-  videoSrc = '/hero.mp4',
+  // Versão all-intra (keyframe em todo frame) do clipe. É ela que torna o
+  // scrub fluido: cada currentTime vira acesso direto, sem decodificar a
+  // cadeia de frames desde o keyframe anterior. Ver public/README-video.md.
+  videoSrc = '/hero-scrub.mp4',
+  scrubFps = 30, // fps do arquivo acima — usado pra quantizar o seek
   letters = DEFAULT_LETTERS,
   manifesto = 'Eu Venci o Mundo.',
   height = '400vh',
@@ -183,18 +189,23 @@ export default function IntroSequence({
         // ~60Hz e o clipe tem 30fps, então metade das escritas pediria um frame
         // que o browser já está mostrando — seek redundante, decode à toa.
         // Nada de listener de scroll paralelo: quem sincroniza é só esta timeline.
+        const lastFrameIndex = Math.max(Math.floor(duration * scrubFps) - 1, 0)
         const head = { t: 0 }
         let lastFrame = -1
-        tl.to(head, {
-          t: duration,
-          duration: ACT1_END,
-          onUpdate: () => {
-            const frame = Math.min(Math.round(head.t * SCRUB_FPS), TOTAL_FRAMES)
-            if (frame === lastFrame) return
-            lastFrame = frame
-            video.currentTime = Math.min(frame / SCRUB_FPS, duration - 1 / SCRUB_FPS)
+        tl.to(
+          head,
+          {
+            t: duration,
+            duration: ACT1_END,
+            onUpdate: () => {
+              const frame = Math.min(Math.round(head.t * scrubFps), lastFrameIndex)
+              if (frame === lastFrame) return
+              lastFrame = frame
+              video.currentTime = frame / scrubFps
+            },
           },
-        }, 0)
+          0
+        )
 
         // ATO 2 — o corte. Punch zoom + aberração cromática + flash + ruído,
         // tudo dentro de 10% do scroll: entra, dá a porrada e sai.
