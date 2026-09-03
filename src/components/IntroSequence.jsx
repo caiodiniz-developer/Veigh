@@ -418,9 +418,13 @@ export default function IntroSequence({
               aria-hidden="true"
             >
               {chars.map((char, index) => {
-                // Espaço vira NBSP: entre spans inline-block um espaço normal
-                // colapsaria e o verso perderia o respiro entre as palavras.
-                const glyph = char === ' ' ? '\u00A0' : char
+                // O espaço vai cru mesmo — quem o preserva é o `white-space:
+                // pre` do .evom-intro__char. Trocar por NBSP seria o reflexo
+                // óbvio, mas na Shrikhand o U+00A0 tem avanço de 32,64px
+                // contra 10,89px do U+0020 (medido a 54,4px): três vezes mais
+                // largo. Com 3 espaços, o verso inchava 13,5% e os vãos entre
+                // as palavras abriam visivelmente.
+                const glyph = char
                 return (
                   <span
                     key={`${char}-${index}`}

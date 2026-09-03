@@ -172,6 +172,16 @@
   display: inline-block;
   isolation: isolate; /* prende o ::before de z-index -1 dentro do caractere */
 
+  /* É isto que segura os espaços do verso: sem `pre`, o span do espaço
+     colapsaria para largura zero e as palavras encostariam.
+
+     O reflexo seria trocar o espaço por NBSP, mas na Shrikhand o U+00A0 tem
+     avanço de 32,64px contra 10,89px do U+0020 (medido a 54,4px) — três vezes
+     mais largo. Com os 3 espaços do verso, isso inchava a linha em 13,5% e
+     abria vãos visíveis entre as palavras. `pre` com espaço normal preserva a
+     métrica original. */
+  white-space: pre;
+
   /* Escondido até o scroll escrever. O GSAP assume daqui. */
   opacity: 0;
   visibility: hidden;
