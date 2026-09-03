@@ -92,6 +92,9 @@
 
 /* ------------------------------------------------------------- Ato 3 */
 
+/* Este container é o alvo da saída da intro (y + opacity + scale no trecho
+   final). Nenhum outro tween toca nele, então não há disputa de propriedade —
+   e o palco sticky em si continua intocado. */
 .evom-intro__content {
   position: relative;
   z-index: 5;
@@ -100,6 +103,7 @@
   align-items: center;
   gap: clamp(18px, 4vh, 44px);
   padding: 6vh 4vw;
+  will-change: transform, opacity;
 }
 
 .evom-intro__letters {
@@ -134,33 +138,99 @@
   visibility: hidden;
 }
 
+/* ------------------------------------------------- o verso, escrito no scroll */
+
+/* O <p> agora é só o continente: quem esconde e revela são os caracteres.
+   Ele nasce visível pra não precisar de um segundo tween coordenando os dois. */
 .evom-intro__manifesto {
   position: relative;
   z-index: 0;
-  isolation: isolate;
   margin: 0;
+  max-width: 92vw;
   font-family: 'Shrikhand', Georgia, 'Times New Roman', serif;
   font-weight: 400;
   font-size: clamp(1.5rem, 5.2vw, 3.4rem);
   line-height: 1.1;
   text-align: center;
   color: var(--evom-ruby);
-  will-change: transform, opacity;
+}
+
+.evom-intro__manifesto-visual {
+  /* Valor default da piscada do cursor. O GSAP sobrescreve inline durante a
+     escrita (onda quadrada dirigida pelo scroll, nunca por timer). */
+  --evom-caret-blink: 1;
+  display: inline-block;
+}
+
+/* Cada caractere é uma caixa própria — é o que permite escondê-lo e revelá-lo
+   individualmente sem mexer no layout dos vizinhos (visibility mantém o
+   espaço reservado, então nada reflui durante a escrita). */
+.evom-intro__char {
+  --evom-caret-head: 0;
+
+  position: relative;
+  display: inline-block;
+  isolation: isolate; /* prende o ::before de z-index -1 dentro do caractere */
+
+  /* Escondido até o scroll escrever. O GSAP assume daqui. */
   opacity: 0;
   visibility: hidden;
 }
 
 /* Contorno prateado atrás do fill rubi — o mesmo friso de diamante que
    contorna cada pingente, sem comer o miolo da letra como faria um
-   text-stroke aplicado direto no texto. */
-.evom-intro__manifesto::before {
-  content: attr(data-text);
+   text-stroke aplicado direto no texto.
+
+   O truque `content: attr(...)` continua valendo, só que agora por caractere:
+   cada span carrega o seu próprio data-char, e o ::before redesenha aquele
+   glifo em transparente com o stroke prateado, uma camada abaixo. Como o par
+   fill/stroke é reconstruído dentro de cada caixa, o contorno acompanha o
+   caractere quando ele entra (opacity + yPercent) sem precisar de máscara,
+   clip ou medição. */
+.evom-intro__char::before {
+  content: attr(data-char);
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
   z-index: -1;
+  white-space: pre;
   color: transparent;
   -webkit-text-stroke: 2.5px var(--evom-diamond);
   text-shadow: 0 0 26px rgba(196, 30, 58, 0.45), 0 6px 24px rgba(20, 2, 6, 0.6);
+}
+
+/* Cursor. Cada caractere tem o seu, mas só o do "cabeçote" da escrita fica
+   aceso: --evom-caret-head vale 1 durante o slot de scroll do caractere e
+   cai a 0 exatamente quando o próximo acende. Resultado: um único cursor,
+   sempre grudado no último caractere escrito, sem medir nada — imune a
+   resize e a quebra de linha. --evom-caret-blink é a onda quadrada. */
+.evom-intro__char::after {
+  content: '';
+  position: absolute;
+  right: -0.12em;
+  top: 0.12em;
+  bottom: 0.14em;
+  width: 0.075em;
+  border-radius: 1px;
+  background: var(--evom-diamond);
+  box-shadow: 0 0 14px rgba(237, 237, 237, 0.6), 0 0 30px rgba(196, 30, 58, 0.45);
+  opacity: calc(var(--evom-caret-head, 0) * var(--evom-caret-blink, 1));
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------ leitor de tela */
+
+.evom-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ------------------------------------------------------- Pular intro */
@@ -209,12 +279,22 @@
 /* ------------------------------------------- prefers-reduced-motion */
 
 /* Sem scrub, sem vídeo, sem Three.js: a seção vira uma tela só, já no
-   estado final. O JS ainda faz o gsap.set, isto é a rede de segurança. */
+   estado final. O JS ainda faz o gsap.set, isto é a rede de segurança.
+   O verso aparece inteiro e parado — sem escrita e sem cursor. */
 .evom-intro.is-static .evom-intro__letter,
-.evom-intro.is-static .evom-intro__manifesto {
+.evom-intro.is-static .evom-intro__char {
   opacity: 1;
   visibility: visible;
   transform: none;
+}
+
+.evom-intro.is-static .evom-intro__content {
+  opacity: 1;
+  transform: none;
+}
+
+.evom-intro.is-static .evom-intro__char::after {
+  display: none;
 }
 
 .evom-intro.is-static .evom-intro__bg {

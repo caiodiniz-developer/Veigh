@@ -17,19 +17,65 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Placeholder só pra demonstrar a revelação — some quando a hero real entrar. */
-.hero-placeholder {
+/* Placeholder da próxima seção. Só o suficiente pra ver a troca acontecendo
+   quando o palco sticky da intro sobe — a hero real substitui isto. */
+.next-section {
+  position: relative;
   min-height: 100vh;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
+  padding: 8vh 6vw;
   text-align: center;
-  background: radial-gradient(ellipse at 50% 30%, #33090f 0%, #0d0407 70%);
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(110, 20, 35, 0.55) 0%, rgba(13, 4, 7, 0) 62%),
+    #0d0407;
 }
 
-.hero-placeholder__flag {
-  opacity: 0.5;
-  font-size: 0.85rem;
+/* Emenda com a intro: a borda de cima do placeholder recebe o palco sem
+   costura visível quando ele sai rolando. */
+.next-section::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 22vh;
+  background: linear-gradient(to bottom, rgba(61, 11, 22, 0.75), rgba(13, 4, 7, 0));
+  pointer-events: none;
+}
+
+.next-section > * {
+  position: relative;
+}
+
+.next-section__eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: rgba(237, 237, 237, 0.55);
+}
+
+.next-section__title {
+  margin: 0;
+  font-family: 'Shrikhand', Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: clamp(2rem, 7vw, 4.5rem);
+  line-height: 1.05;
+  color: var(--evom-gold);
+}
+
+.next-section__note {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 0.95rem;
+  color: rgba(255, 248, 236, 0.6);
+}
+
+.next-section__flag {
+  margin: 0;
+  opacity: 0.4;
+  font-size: 0.8rem;
 }

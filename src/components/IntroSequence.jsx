@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { createIntroBackground } from './introBackground.js'
@@ -22,6 +22,21 @@ const ACT1_END = 0.55 // fim do scrub do vídeo
 const ACT2_END = 0.65 // fim do corte cinematográfico
 const ACT2_LEN = ACT2_END - ACT1_END
 const SEG = (1 - ACT2_END) / 5 // E, V, O, M, texto
+
+// Sub-trecho do verso: escrita caractere a caractere + entrega pra próxima seção.
+//   0.930 ───────────── 0.973 ─ 0.975 ────── 1
+//   │ escrita + cursor  │ hold  │ saída      │
+const WRITE_START = ACT2_END + 4 * SEG // 0.93
+const OUTRO_START = 0.975 // a intro começa a entregar o palco
+const OUTRO_MID = 0.99
+const WRITE_LEN = (OUTRO_START - WRITE_START) * 0.95 // sobra um respiro antes da saída
+const CARET_BLINKS = 5
+
+// Ease de "máquina de escrever": o caractere segura o valor inicial durante
+// todo o seu slot de scroll e estala no último instante. O steps(1) do GSAP
+// não serve aqui porque o SteppedEase troca em 50% do slot, o que abriria um
+// buraco entre o caractere escrito e o cursor.
+const holdThenSnap = (p) => (p < 1 ? 0 : 1)
 
 const BG_WAKE = 0.45 // progresso em que a cena Three.js começa a renderizar
 const DEFAULT_LETTERS = ['/e.png', '/v.png', '/o.png', '/m.png']
@@ -57,12 +72,24 @@ export default function IntroSequence({
   const videoRef = useRef(null)
   const flashRef = useRef(null)
   const noiseRef = useRef(null)
+  const contentRef = useRef(null)
   const lettersRef = useRef([])
   const manifestoRef = useRef(null)
+  const manifestoVisualRef = useRef(null)
+  const charsRef = useRef([])
   const rgbRedRef = useRef(null)
   const rgbBlueRef = useRef(null)
 
   const completedRef = useRef(false)
+
+  // Split manual por caractere. SplitText é plugin pago — e aqui nem faria
+  // falta: o verso é fixo e cabe numa linha só. Array.from em vez de split('')
+  // pra não partir pares substitutos.
+  const chars = useMemo(() => Array.from(manifesto), [manifesto])
+
+  useEffect(() => {
+    charsRef.current.length = chars.length
+  }, [chars])
 
   const complete = useCallback(() => {
     if (completedRef.current) return
@@ -89,12 +116,17 @@ export default function IntroSequence({
   // ----------------------------------------------------------- reduced motion
   useEffect(() => {
     if (!reduced) return
-    // Estado final direto: sem scrub, sem vídeo, sem cena Three.js.
-    gsap.set([...lettersRef.current, manifestoRef.current].filter(Boolean), {
-      autoAlpha: 1,
-      scale: 1,
-      y: 0,
-    })
+    // Estado final direto: sem scrub, sem vídeo, sem cena Three.js. O verso
+    // aparece inteiro e parado — nada de escrita, nada de cursor.
+    gsap.set(
+      [
+        ...lettersRef.current,
+        ...charsRef.current,
+        manifestoRef.current,
+        contentRef.current,
+      ].filter(Boolean),
+      { autoAlpha: 1, scale: 1, y: 0, yPercent: 0 }
+    )
     complete()
   }, [reduced, complete])
 
@@ -198,11 +230,94 @@ export default function IntroSequence({
           )
         })
 
+        // ------------------------------------------ o verso, escrito no scroll
+        const charEls = charsRef.current.filter(Boolean)
+
+        if (charEls.length) {
+          // Estado escondido explícito. Depender do immediateRender de um fromTo
+          // posicionado adiante do playhead é frágil — e este trigger usa
+          // invalidateOnRefresh —, então o esconderijo é declarado na mão.
+          gsap.set(charEls, { autoAlpha: 0, yPercent: 22 })
+
+          // Um slot de scroll por caractere. `each` é a unidade de tudo aqui:
+          // o caractere nasce no começo do slot e o cursor vive dentro dele.
+          const each = WRITE_LEN / charEls.length
+
+          tl.fromTo(
+            charEls,
+            { autoAlpha: 0, yPercent: 22 },
+            {
+              autoAlpha: 1,
+              yPercent: 0,
+              duration: each * 0.6,
+              ease: 'none', // scrub: a curva vem da geometria, não do tempo
+              stagger: each,
+            },
+            WRITE_START
+          )
+
+          // Cursor: cada caractere carrega o seu (::after), mas só o do
+          // "cabeçote" fica aceso. Como o caractere anterior apaga o dele
+          // exatamente quando o próximo acende, existe sempre um único cursor —
+          // e ele acompanha a escrita sem nenhuma medição de layout, o que o
+          // torna imune a resize e a rebreak de linha.
+          tl.fromTo(
+            charEls,
+            { '--evom-caret-head': 1 },
+            {
+              '--evom-caret-head': 0,
+              duration: each,
+              ease: holdThenSnap,
+              stagger: each,
+              immediateRender: false,
+            },
+            WRITE_START
+          )
+
+          // Piscada: onda quadrada dirigida pelo scroll (repeat + steps(1), que
+          // troca no meio de cada ciclo). Nada de @keyframes com timer.
+          tl.fromTo(
+            manifestoVisualRef.current,
+            { '--evom-caret-blink': 1 },
+            {
+              '--evom-caret-blink': 0,
+              duration: WRITE_LEN / CARET_BLINKS,
+              ease: 'steps(1)',
+              repeat: CARET_BLINKS - 1,
+              immediateRender: false,
+            },
+            WRITE_START
+          )
+        }
+
+        // ----------------------------------------- entrega pra próxima seção
+        // Fica na mesma timeline de propósito: dois scrubs independentes, cada
+        // um com o seu smoothing, dessincronizariam a saída do palco sticky. O
+        // alvo é o container do conteúdo, que nenhum outro tween toca — sem
+        // disputa de propriedade. O palco em si não é tocado: o sticky segue
+        // intacto e não pisca.
         tl.fromTo(
-          manifestoRef.current,
-          { y: 12, autoAlpha: 0 },
-          { y: 0, autoAlpha: 1, duration: SEG, ease: 'power2.out' },
-          ACT2_END + 4 * SEG
+          contentRef.current,
+          { y: 0, scale: 1, opacity: 1 },
+          {
+            y: -16,
+            scale: 0.99,
+            opacity: 0.82,
+            duration: OUTRO_MID - OUTRO_START,
+            ease: 'none',
+          },
+          OUTRO_START
+        )
+        tl.to(
+          contentRef.current,
+          {
+            y: -78,
+            scale: 0.955,
+            opacity: 0.12, // nunca 0: a intro não pode sumir antes de 1.0
+            duration: 1 - OUTRO_MID,
+            ease: 'none',
+          },
+          OUTRO_MID
         )
       }, root)
 
@@ -232,7 +347,7 @@ export default function IntroSequence({
       ctx?.revert()
       background?.dispose()
     }
-  }, [reduced, complete, onProgress])
+  }, [reduced, complete, onProgress, chars])
 
   // Leva o usuário ao fim exato do trecho sticky — o documento segue dali.
   const skip = useCallback(() => {
@@ -269,7 +384,7 @@ export default function IntroSequence({
         <div ref={noiseRef} className="evom-intro__noise" aria-hidden="true" />
         <div ref={flashRef} className="evom-intro__flash" aria-hidden="true" />
 
-        <div className="evom-intro__content">
+        <div ref={contentRef} className="evom-intro__content">
           <div className="evom-intro__letters" aria-hidden="true">
             {letters.map((src, index) => (
               <span className="evom-intro__slot" key={src}>
@@ -286,8 +401,34 @@ export default function IntroSequence({
             ))}
           </div>
 
-          <p ref={manifestoRef} className="evom-intro__manifesto" data-text={manifesto}>
-            {manifesto}
+          {/* O verso continua sendo um parágrafo com o texto real: o leitor de
+              tela lê a frase inteira de uma vez, sem tropeçar nos spans de
+              caractere, que ficam aria-hidden. */}
+          <p ref={manifestoRef} className="evom-intro__manifesto">
+            <span className="evom-sr-only">{manifesto}</span>
+            <span
+              ref={manifestoVisualRef}
+              className="evom-intro__manifesto-visual"
+              aria-hidden="true"
+            >
+              {chars.map((char, index) => {
+                // Espaco vira NBSP: entre spans inline-block um espaco normal
+                // colapsaria e o verso perderia o respiro entre as palavras.
+                const glyph = char === ' ' ? '\u00A0' : char
+                return (
+                  <span
+                    key={`${char}-${index}`}
+                    ref={(el) => {
+                      charsRef.current[index] = el
+                    }}
+                    className="evom-intro__char"
+                    data-char={glyph}
+                  >
+                    {glyph}
+                  </span>
+                )
+              })}
+            </span>
           </p>
         </div>
 
