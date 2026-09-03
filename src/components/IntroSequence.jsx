@@ -177,7 +177,24 @@ export default function IntroSequence({
         })
 
         // ATO 1 — scrubbing puro: o scroll é o cabeçote do vídeo, não playback.
-        tl.to(video, { currentTime: duration, duration: ACT1_END }, 0)
+        //
+        // Não escrevo currentTime direto do tween: quantizo pro frame mais
+        // próximo e só escrevo quando o frame muda. O ScrollTrigger atualiza a
+        // ~60Hz e o clipe tem 30fps, então metade das escritas pediria um frame
+        // que o browser já está mostrando — seek redundante, decode à toa.
+        // Nada de listener de scroll paralelo: quem sincroniza é só esta timeline.
+        const head = { t: 0 }
+        let lastFrame = -1
+        tl.to(head, {
+          t: duration,
+          duration: ACT1_END,
+          onUpdate: () => {
+            const frame = Math.min(Math.round(head.t * SCRUB_FPS), TOTAL_FRAMES)
+            if (frame === lastFrame) return
+            lastFrame = frame
+            video.currentTime = Math.min(frame / SCRUB_FPS, duration - 1 / SCRUB_FPS)
+          },
+        }, 0)
 
         // ATO 2 — o corte. Punch zoom + aberração cromática + flash + ruído,
         // tudo dentro de 10% do scroll: entra, dá a porrada e sai.
