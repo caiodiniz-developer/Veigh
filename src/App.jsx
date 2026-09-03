@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import IntroSequence from './components/IntroSequence.jsx'
+import HistorySection from './components/HistorySection.jsx'
 
 export default function App() {
   const [introSeen, setIntroSeen] = useState(false)
@@ -11,6 +12,9 @@ export default function App() {
       <IntroSequence onIntroComplete={() => setIntroSeen(true)} />
 
       <main className="site" data-intro-seen={introSeen}>
+        {/* Seção 1 — A História. Palco sticky próprio, logo abaixo da intro. */}
+        <HistorySection />
+
         {/* Placeholder: existe só pra demonstrar a troca de seção no fim da
             intro. A hero real (capa do álbum + reveal no scroll) entra aqui. */}
         <section className="next-section">

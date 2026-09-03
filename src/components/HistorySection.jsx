@@ -159,6 +159,13 @@ export default function HistorySection({
         },
       })
 
+      // Tween vazio de duração 1, ancorado em 0. Sem ele, a duração da timeline
+      // seria o fim do último tween (0.805) e o scrub mapearia o progresso
+      // 0→1 do scroll em 0→0.805 de tempo: todos os beats atrasariam ~24% e o
+      // quarto nunca chegaria a ficar inteiro na tela. Com isto, as janelas de
+      // BEATS são literalmente o progresso do scroll.
+      tl.to({}, { duration: 1 }, 0)
+
       els.forEach((el, index) => {
         const beat = BEATS[index]
         if (!beat) return
