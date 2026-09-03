@@ -381,7 +381,7 @@ export default function IntroSequence({
       ctx?.revert()
       background?.dispose()
     }
-  }, [reduced, complete, onProgress, chars])
+  }, [reduced, complete, onProgress, chars, scrubFps])
 
   // Leva o usuário ao fim exato do trecho sticky — o documento segue dali.
   const skip = useCallback(() => {

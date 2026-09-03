@@ -44,7 +44,7 @@ const FOG_FRAG = /* glsl */ `
   float fbm(vec2 p) {
     float v = 0.0;
     float a = 0.5;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 3; i++) {
       v += a * noise(p);
       p *= 2.02;
       a *= 0.5;
@@ -131,7 +131,10 @@ export function createIntroBackground(canvas) {
   }
   if (!renderer) return null
 
-  const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+  // 1.25 em vez de 1.5: a névoa é difusa e as brasas são pontos pequenos, então
+  // ninguém vê a diferença — mas o fragment shader roda em ~30% menos pixels,
+  // o que importa porque ele divide o frame com o scrub do vídeo e com o GSAP.
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.25)
   renderer.setPixelRatio(dpr)
 
   const scene = new THREE.Scene()

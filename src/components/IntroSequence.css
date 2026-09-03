@@ -55,7 +55,10 @@
   inset: 0;
   z-index: 1;
   transform-origin: 50% 48%;
-  will-change: transform, filter;
+  /* Só transform: o filtro de split RGB entra e sai durante os 10% do Ato 2,
+     e anunciar `filter` aqui manteria uma camada de filtro viva durante o
+     scrub inteiro — custo permanente por um efeito momentâneo. */
+  will-change: transform;
 }
 
 .evom-intro__video {
