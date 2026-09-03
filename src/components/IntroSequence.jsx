@@ -199,9 +199,15 @@ export default function IntroSequence({
             duration: ACT1_END,
             onUpdate: () => {
               const frame = Math.min(Math.round(head.t * scrubFps), lastFrameIndex)
-              if (frame === lastFrame) return
+              const wanted = frame / scrubFps
+              // O segundo teste não é redundante: enquanto o vídeo fica
+              // escondido (Ato 3), o Chrome pode descartar a mídia e zerar o
+              // currentTime. Se ao voltar o scroll caísse exatamente no mesmo
+              // frame do cache, o guard sozinho pularia a escrita e a intro
+              // mostraria o frame 0. Conferir o estado real do elemento fecha isso.
+              if (frame === lastFrame && Math.abs(video.currentTime - wanted) < 0.5 / scrubFps) return
               lastFrame = frame
-              video.currentTime = frame / scrubFps
+              video.currentTime = wanted
             },
           },
           0
