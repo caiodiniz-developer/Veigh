@@ -281,7 +281,7 @@ export default function IntroSequence({
           )
 
           // Piscada dirigida pelo scroll: repeat sobre uma onda quadrada.
-          // Nada de @keyframes com timer — quem pisca o cursor e a rolagem.
+          // Nada de @keyframes com timer — quem pisca o cursor é a rolagem.
           tl.fromTo(
             manifestoVisualRef.current,
             { '--evom-caret-blink': 1 },
