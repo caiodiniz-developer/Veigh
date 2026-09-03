@@ -34,7 +34,7 @@ gsap.registerPlugin(ScrollTrigger)
 const FADE = 0.055
 const BEATS = [
   { in: 0.04, out: 0.205 },
-  { in: 0.28, out: 0.445 },
+  { in: 0.28, out: 0.435 },
   { in: 0.51, out: 0.675 },
   { in: 0.75, out: null },
 ]
