@@ -1,0 +1,35 @@
+:root {
+  --evom-wine: #6e1423;
+  --evom-gold: #e8c77e;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: #0d0407;
+  color: #fff8ec;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Placeholder só pra demonstrar a revelação — some quando a hero real entrar. */
+.hero-placeholder {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 30%, #33090f 0%, #0d0407 70%);
+}
+
+.hero-placeholder__flag {
+  opacity: 0.5;
+  font-size: 0.85rem;
+}
