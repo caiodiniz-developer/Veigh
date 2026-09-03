@@ -38,6 +38,12 @@ const CARET_BLINKS = 5
 // buraco entre o caractere escrito e o cursor.
 const holdThenSnap = (p) => (p < 1 ? 0 : 1)
 
+// Piscada do cursor: onda quadrada, mas assimétrica (70% aceso / 30% apagado).
+// steps(1) do GSAP daria 50/50 — e como a piscada é dirigida pelo scroll, ela
+// congela onde o usuário parar: com 50/50, metade das paradas deixaria o
+// cursor apagado, o que lê como bug em vez de intenção.
+const caretBlink = (p) => (p < 0.7 ? 0 : 1)
+
 const BG_WAKE = 0.45 // progresso em que a cena Three.js começa a renderizar
 const DEFAULT_LETTERS = ['/e.png', '/v.png', '/o.png', '/m.png']
 
@@ -274,15 +280,15 @@ export default function IntroSequence({
             WRITE_START
           )
 
-          // Piscada: onda quadrada dirigida pelo scroll (repeat + steps(1), que
-          // troca no meio de cada ciclo). Nada de @keyframes com timer.
+          // Piscada dirigida pelo scroll: repeat sobre uma onda quadrada.
+          // Nada de @keyframes com timer — quem pisca o cursor e a rolagem.
           tl.fromTo(
             manifestoVisualRef.current,
             { '--evom-caret-blink': 1 },
             {
               '--evom-caret-blink': 0,
               duration: WRITE_LEN / CARET_BLINKS,
-              ease: 'steps(1)',
+              ease: caretBlink,
               repeat: CARET_BLINKS - 1,
               immediateRender: false,
             },
@@ -412,7 +418,7 @@ export default function IntroSequence({
               aria-hidden="true"
             >
               {chars.map((char, index) => {
-                // Espaco vira NBSP: entre spans inline-block um espaco normal
+                // Espaço vira NBSP: entre spans inline-block um espaço normal
                 // colapsaria e o verso perderia o respiro entre as palavras.
                 const glyph = char === ' ' ? '\u00A0' : char
                 return (
