@@ -3,8 +3,8 @@
   --evom-bone: #f5efe6;
 
   position: relative;
-  height: 320vh; /* curso de scroll da abertura do palco */
-  background: #030102;
+  width: 100%;
+  background: #020103;
   color: var(--evom-bone);
 }
 
@@ -14,54 +14,39 @@
   height: 100vh;
   height: 100svh;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: clamp(24px, 6vh, 60px);
-  background: #030102; /* breu: a seção começa apagada de propósito */
-}
-
-/* Luz geral, a última a subir. */
-.evom-shows__glow {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  opacity: 0;
-  visibility: hidden;
+  display: grid;
+  place-items: center;
+  /* Breu com um resto de luz de palco vindo de baixo — a câmera está no palco,
+     então a fonte de luz está atrás de quem olha. */
   background:
-    radial-gradient(ellipse at 50% 78%, rgba(196, 30, 58, 0.34) 0%, transparent 62%),
-    radial-gradient(ellipse at 50% 12%, rgba(232, 199, 126, 0.14) 0%, transparent 54%);
+    radial-gradient(ellipse at 50% 108%, rgba(196, 30, 58, 0.34) 0%, transparent 62%),
+    #020103;
 }
 
-/* Feixes de refletor varrendo o palco. */
-.evom-shows__beams {
+.evom-shows__canvas {
   position: absolute;
   inset: 0;
-  z-index: 1;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
-.evom-shows__beam {
+/* Fumaça de palco: separa as fileiras e impede que o campo de luzes vire um
+   chuvisco uniforme. Sem ela a multidão lê como ruído de TV. */
+.evom-shows__haze {
   position: absolute;
-  top: -14%;
-  left: calc(12% + var(--i) * 19%);
-  width: clamp(80px, 12vw, 190px);
-  height: 128%;
-  transform-origin: 50% 0;
-  rotate: calc(-14deg + var(--i) * 7deg);
-  opacity: 0;
-  visibility: hidden;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 246, 231, 0.24) 0%,
-    rgba(196, 30, 58, 0.12) 46%,
-    transparent 82%
-  );
-  filter: blur(16px);
-  will-change: transform, opacity;
+  inset: -10%;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 30% 62%, rgba(255, 226, 200, 0.06) 0%, transparent 58%),
+    radial-gradient(ellipse at 72% 48%, rgba(196, 30, 58, 0.07) 0%, transparent 54%);
+  filter: blur(30px);
+  animation: evom-haze 26s ease-in-out infinite alternate;
+}
+
+@keyframes evom-haze {
+  from { transform: translate3d(-3%, 1%, 0) scale(1); }
+  to   { transform: translate3d(4%, -2%, 0) scale(1.14); }
 }
 
 .evom-shows__title {
@@ -76,52 +61,12 @@
   letter-spacing: -0.03em;
   opacity: 0;
   visibility: hidden;
+  /* Sombra larga e escura: o título fica sobre um campo de luzes, e sem ela a
+     tipografia se dissolve no cintilar. */
+  text-shadow: 0 0 60px rgba(2, 1, 3, 0.95), 0 6px 30px rgba(2, 1, 3, 0.9);
   will-change: transform, opacity;
 }
 
 .evom-shows__title span {
   color: var(--evom-ruby);
-}
-
-/* As fotos em três profundidades. Escala derivada de --depth: as do fundo
-   nascem menores, o que sustenta a leitura de distância. */
-.evom-shows__gallery {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: clamp(8px, 1.6vw, 26px);
-  width: min(96vw, 1500px);
-}
-
-.evom-shows__shot {
-  position: relative;
-  margin: 0;
-  flex: 0 0 auto;
-  width: calc(clamp(90px, 13vw, 210px) * (0.62 + var(--depth) * 0.5));
-  opacity: 0;
-  visibility: hidden;
-  filter: brightness(calc(0.55 + var(--depth) * 0.45));
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75);
-  will-change: transform, opacity;
-}
-
-.evom-shows__shot img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
-  background: #120609;
-}
-
-@media (max-width: 760px) {
-  .evom-shows__gallery {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .evom-shows__shot {
-    width: 27vw;
-  }
 }
