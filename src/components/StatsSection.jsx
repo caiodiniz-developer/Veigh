@@ -7,7 +7,13 @@ import './StatsSection.css'
 gsap.registerPlugin(ScrollTrigger)
 
 /**
- * Números monumentais.
+ * Números monumentais, sobre o céu dourado.
+ *
+ * Esta é a única seção clara do site, e é de propósito: doze capítulos
+ * seguidos no escuro achatam a percepção, e um respiro luminoso no meio faz
+ * o vinho voltar a pesar quando o site escurece de novo. O céu é o mesmo
+ * clipe da intro — o material que abriu a experiência volta como ambiente,
+ * fechando um laço em vez de introduzir um asset novo.
  *
  * Nada de quatro cards lado a lado: cada número ocupa a tela sozinho, e o
  * primeiro é preenchido pelo vídeo — o algarismo é uma janela, não um texto
@@ -17,7 +23,7 @@ gsap.registerPlugin(ScrollTrigger)
  * layout, então estão marcados para você confirmar antes de ir ao ar.
  */
 const STATS = [
-  { value: 5, suffix: 'BI+', label: 'streams', decimals: 0, masked: true },
+  { value: 5, suffix: 'BI+', label: 'streams', decimals: 0 },
   { value: 12, suffix: 'MI', label: 'ouvintes mensais', decimals: 0, confirm: true },
   { value: 50, prefix: 'TOP ', suffix: '', label: 'global', decimals: 0, confirm: true },
   { value: 30, prefix: 'UNDER ', suffix: '', label: 'Forbes', decimals: 0 },
@@ -69,22 +75,16 @@ export default function StatsSection() {
 
   return (
     <section ref={rootRef} className="evom-stats" aria-label="Números">
+      {/* O céu corre atrás de tudo, em câmera lenta e desfocado: é ambiente,
+          não é o assunto. O vídeo é o mesmo da intro, já all-intra. */}
+      <div className="evom-stats__sky" aria-hidden="true">
+        <video src={VIDEOS.heroScrub} muted loop playsInline autoPlay preload="metadata" />
+        <span className="evom-stats__haze" />
+      </div>
+
       {STATS.map((s) => (
         <div className="evom-stats__item" key={s.label}>
-          <p className={`evom-stats__num${s.masked ? ' is-masked' : ''}`}>
-            {s.masked && (
-              <video
-                className="evom-stats__video"
-                src={VIDEOS.sessao1}
-                poster={VIDEOS.sessao1Poster}
-                muted
-                loop
-                playsInline
-                autoPlay
-                preload="metadata"
-                aria-hidden="true"
-              />
-            )}
+          <p className="evom-stats__num">
             <span className="evom-stats__num-text">
               {s.prefix}
               <span className="evom-stats__num-value" data-value={s.value}>
