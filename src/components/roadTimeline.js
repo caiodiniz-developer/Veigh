@@ -96,6 +96,7 @@ const CITY_FRAG = /* glsl */ `
   precision highp float;
   uniform vec3 uLight;
   uniform vec3 uFog;
+  uniform float uTime;
   varying vec3 vLocal;
   varying vec3 vNormal;
   varying float vSeed;
@@ -116,6 +117,11 @@ const CITY_FRAG = /* glsl */ `
       vec2 face = abs(vNormal.x) > 0.5 ? vec2(vLocal.z, vLocal.y) : vec2(vLocal.x, vLocal.y);
       vec2 cell = floor(face / vec2(0.42, 0.62));
       float lit = step(0.66, hash(cell + vSeed * 37.0));
+      // A cidade vive: cada janela tem o seu próprio relógio, e de tempos em
+      // tempos apaga e volta. Sem isso a fachada é um padrão fixo, e padrão
+      // fixo o olho identifica como textura em segundos.
+      float slot = floor(uTime * 0.09 + hash(cell) * 40.0);
+      lit *= step(0.22, hash(cell + slot * 7.3));
       // Nem toda janela acesa tem o mesmo brilho: prédio com brilho uniforme
       // lê como textura, não como janelas.
       float strength = 0.35 + hash(cell + vSeed * 91.0) * 0.65;
@@ -125,8 +131,70 @@ const CITY_FRAG = /* glsl */ `
       col += uLight * lit * pane * strength * 1.5;
     }
 
+    // Luz de obstáculo no topo: vermelha, piscando fora de sincronia entre
+    // prédios. É o detalhe que datou a silhueta como cidade grande de verdade.
+    if (vNormal.y > 0.5) {
+      float blink = step(0.72, fract(uTime * 0.35 + vSeed));
+      col += vec3(0.9, 0.08, 0.14) * blink * step(0.55, hash(vec2(vSeed, 3.1)));
+    }
+
     float fog = smoothstep(26.0, 175.0, vDepth);
     gl_FragColor = vec4(mix(col, uFog, fog), 1.0);
+  }
+`
+
+const CAR_VERT = /* glsl */ `
+  attribute vec3 aPos;
+  attribute float aSize;
+  attribute float aSpeed;
+  attribute float aSeed;
+
+  uniform float uTime;
+  uniform float uLen;
+
+  varying vec2 vUv;
+  varying float vDepth;
+  varying float vSeed;
+
+  void main() {
+    vec3 p = aPos;
+    // O carro corre no eixo Z e reentra pelo começo. mod em vez de reposicionar
+    // na CPU: o tráfego inteiro é uma conta no vertex shader.
+    float travel = uTime * aSpeed * (aSeed > 0.5 ? 1.0 : -1.0);
+    p.z = mod(p.z + travel + uLen, uLen) - uLen;
+
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    mv.xy += position.xy * aSize;
+    vDepth = -mv.z;
+    vUv = uv;
+    vSeed = aSeed;
+    gl_Position = projectionMatrix * mv;
+  }
+`
+
+const CAR_FRAG = /* glsl */ `
+  precision highp float;
+  varying vec2 vUv;
+  varying float vDepth;
+  varying float vSeed;
+
+  void main() {
+    vec2 d = vUv - 0.5;
+    // Achatado na horizontal: farol visto de frente é um traço, não um ponto.
+    d.y *= 2.6;
+    float r = length(d) * 2.0;
+    float a = pow(max(0.0, 1.0 - r), 2.2);
+    // Núcleo estourado no meio do halo: farol tem um ponto branco duro dentro
+    // do brilho, e é ele que faz a luz ler como lâmpada e não como mancha.
+    a += pow(max(0.0, 1.0 - r * 2.6), 6.0) * 0.9;
+
+    // Quem vem na direção da câmera mostra farol; quem se afasta, lanterna.
+    vec3 col = vSeed > 0.5
+      ? vec3(1.0, 0.94, 0.82)
+      : vec3(1.0, 0.14, 0.10);
+
+    a *= 1.0 - smoothstep(70.0, 240.0, vDepth);
+    gl_FragColor = vec4(col * a, a);
   }
 `
 
@@ -398,6 +466,59 @@ export async function createRoadTimeline(canvas, entries) {
   glows.renderOrder = 2
   scene.add(glows)
 
+  // --- tráfego --------------------------------------------------------------
+  // Pares de luz correndo nas duas mãos. Não há carroceria: à noite, numa
+  // estrada, o que se vê é a luz. Modelar o carro custaria geometria e não
+  // acrescentaria nada que a velocidade e a cor já não digam.
+  const CARS = 26
+  const carGeo = new THREE.InstancedBufferGeometry()
+  const carQuad = new THREE.PlaneGeometry(1, 1)
+  carGeo.index = carQuad.index
+  carGeo.attributes.position = carQuad.attributes.position
+  carGeo.attributes.uv = carQuad.attributes.uv
+  carGeo.instanceCount = CARS
+
+  const carPos = new Float32Array(CARS * 3)
+  const carSize = new Float32Array(CARS)
+  const carSpeed = new Float32Array(CARS)
+  const carSeed = new Float32Array(CARS)
+
+  for (let i = 0; i < CARS; i++) {
+    const pair = Math.floor(i / 2)
+    const oncoming = pair % 2 === 0
+    // Faróis andam aos pares, separados pela bitola do carro.
+    const side = i % 2 ? 1 : -1
+    carPos[i * 3] = (oncoming ? -1 : 1) * (ROAD_W * 0.24) + side * 0.62
+    carPos[i * 3 + 1] = 0.72
+    carPos[i * 3 + 2] = -(pair / (CARS / 2)) * ROAD_LEN
+    // Calibrado no olho contra o screenshot: a 0.85 o farol virava um ponto
+    // de um pixel a meia distância e desaparecia contra as janelas da cidade.
+    carSize[i] = oncoming ? 1.7 : 1.15
+    carSpeed[i] = 9 + Math.random() * 14
+    carSeed[i] = oncoming ? 0.9 : 0.1
+  }
+
+  carGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(carPos, 3))
+  carGeo.setAttribute('aSize', new THREE.InstancedBufferAttribute(carSize, 1))
+  carGeo.setAttribute('aSpeed', new THREE.InstancedBufferAttribute(carSpeed, 1))
+  carGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(carSeed, 1))
+
+  const carUniforms = { uTime: { value: 0 }, uLen: { value: ROAD_LEN } }
+  const cars = new THREE.Mesh(
+    carGeo,
+    new THREE.ShaderMaterial({
+      vertexShader: CAR_VERT,
+      fragmentShader: CAR_FRAG,
+      uniforms: carUniforms,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+  )
+  cars.frustumCulled = false
+  cars.renderOrder = 3
+  scene.add(cars)
+
   // --- anos e fotos ---------------------------------------------------------
   const marks = []
   entries.forEach((e, i) => {
@@ -493,7 +614,27 @@ export async function createRoadTimeline(canvas, entries) {
     camera.updateProjectionMatrix()
   }
 
+  // A cena deixa de ser puramente scrubada: tráfego e janelas correm no tempo
+  // mesmo com o scroll parado. Só roda enquanto a seção está visível.
+  const cityUniforms = { uTime: { value: 0 } }
+  city.material.uniforms.uTime = cityUniforms.uTime
+
+  let raf = 0
+  let running = false
+  let last = 0
+  let clock = 0
+
   const render = () => renderer.render(scene, camera)
+
+  const loop = (now) => {
+    raf = requestAnimationFrame(loop)
+    const dt = Math.min((now - last) / 1000, 0.05)
+    last = now
+    clock += dt
+    carUniforms.uTime.value = clock
+    cityUniforms.uTime.value = clock
+    render()
+  }
 
   // Integra a curva de desaceleração uma vez, para converter progresso em
   // distância sem recalcular a integral a cada frame de scroll.
@@ -514,6 +655,16 @@ export async function createRoadTimeline(canvas, entries) {
   resize()
 
   return {
+    start() {
+      if (running) return
+      running = true
+      last = performance.now()
+      raf = requestAnimationFrame(loop)
+    },
+    stop() {
+      running = false
+      cancelAnimationFrame(raf)
+    },
     setProgress(p) {
       const t = Math.min(Math.max(p, 0), 1)
       const idx = Math.min(STEPS, Math.round(t * STEPS))
@@ -539,7 +690,11 @@ export async function createRoadTimeline(canvas, entries) {
       return { light: `#${light.getHexString()}`, index: i0 }
     },
     dispose() {
+      cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
+      carQuad.dispose()
+      carGeo.dispose()
+      cars.material.dispose()
       quad.dispose()
       box.dispose()
       glowQuad.dispose()

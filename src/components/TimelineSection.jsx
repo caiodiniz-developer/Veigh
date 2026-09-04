@@ -89,9 +89,13 @@ export default function TimelineSection({ height = '620vh', respectReducedMotion
           const out = road.setProgress(self.progress)
           if (out) root.style.setProperty('--evom-era-light', out.light)
         },
+        // O tráfego e as janelas correm no tempo, então a cena precisa de
+        // loop — mas só enquanto a estrada está na tela.
+        onToggle: (self) => (self.isActive ? road.start() : road.stop()),
       })
 
       road.setProgress(st.progress)
+      if (st.isActive) road.start()
       ScrollTrigger.refresh()
     })
 

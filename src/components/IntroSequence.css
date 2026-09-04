@@ -353,3 +353,43 @@
 .evom-intro.is-static .evom-intro__char::before {
   text-shadow: 0 0 30px rgba(10, 3, 5, 0.9), 0 6px 26px rgba(10, 3, 5, 0.8);
 }
+
+/* ------------------------------------------- brilho de diamante nos pingentes
+
+   Os pingentes são joia: rubi cravejado em diamante. Parados eles são só uma
+   imagem de joia; o que faz pedra lida como pedra é o reflexo cruzando a
+   superfície quando a luz se move. Uma faixa clara varre cada letra em tempos
+   diferentes — junto, elas piscariam como um cartaz. */
+.evom-intro__slot {
+  position: relative;
+  overflow: hidden;
+}
+
+.evom-intro__slot::after {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  pointer-events: none;
+  background: linear-gradient(
+    68deg,
+    transparent 38%,
+    rgba(255, 252, 245, 0.5) 47%,
+    rgba(255, 255, 255, 0.85) 50%,
+    rgba(255, 252, 245, 0.5) 53%,
+    transparent 62%
+  );
+  mix-blend-mode: screen;
+  transform: translateX(-130%);
+  animation: evom-glint 7s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+/* Cada letra brilha no seu tempo. O intervalo longo é proposital: reflexo
+   frequente vira pisca-pisca de vitrine, não joia. */
+.evom-intro__slot:nth-child(2)::after { animation-delay: 1.1s; }
+.evom-intro__slot:nth-child(3)::after { animation-delay: 2.4s; }
+.evom-intro__slot:nth-child(4)::after { animation-delay: 3.3s; }
+
+@keyframes evom-glint {
+  0%, 62% { transform: translateX(-130%); }
+  76%, 100% { transform: translateX(130%); }
+}
