@@ -6,8 +6,13 @@ import * as THREE from 'three'
  * Três fases num único progresso de scroll (0→1):
  *   0.00–0.16  a capa inteira, câmera empurrando devagar
  *   0.16–0.54  explode: cada caco voa, gira e se afasta
- *   0.54–0.94  os mesmos cacos convergem para as posições que desenham
+ *   0.54–0.90  os mesmos cacos convergem para as posições que desenham
  *              "EU VENCI / O MUNDO" — as letras são feitas de pedaços da capa
+ *   0.90–1.00  MATCH CUT: os cacos largam a frase e voltam a ser a capa, no
+ *              tamanho e na posição exatos do card central do player logo
+ *              abaixo. A seção seguinte começa com a mesma imagem, do mesmo
+ *              tamanho, no mesmo ponto da tela — e a emenda entre os dois
+ *              capítulos desaparece.
  *
  * Tudo acontece no vertex shader, a partir de atributos por instância. Nenhum
  * cálculo por caco na CPU: mudar de fase é escrever um float num uniform, o que
@@ -28,6 +33,8 @@ const VERT = /* glsl */ `
   uniform float uProgress;
   uniform float uCell;
   uniform float uTextScale;
+  uniform float uReform;    // 0..1 — a volta dos cacos para a capa
+  uniform float uCardScale; // tamanho da capa remontada, em unidades de mundo
 
   varying vec2 vUv;
   varying float vForm;
@@ -59,6 +66,12 @@ const VERT = /* glsl */ `
     vec3 pos = mix(aHome, aHome + aBurst, b);
     pos = mix(pos, aTarget * vec3(uTextScale, uTextScale, 1.0), f);
 
+    // MATCH CUT. Cada caco volta para a MESMA célula de onde saiu, agora numa
+    // capa reduzida ao tamanho do card do player. Como aHome já é a posição de
+    // origem, a capa se remonta exata — nenhum caco troca de lugar.
+    vec3 card = vec3(aHome.xy * uCardScale, 0.0);
+    pos = mix(pos, card, uReform);
+
     // O tamanho do caco ao formar a frase é o parâmetro mais sensível da cena,
     // e erra para os dois lados: pequeno demais e a letra sai furada, virando
     // poeira; grande demais e os cacos transbordam o traço e preenchem a caixa
@@ -68,9 +81,12 @@ const VERT = /* glsl */ `
     // Área por caco = (0.0375 * s)², e s = 0.72 dá ~1,5x de cobertura — o
     // suficiente para o traço fechar sem vazar para fora dele.
     float scale = mix(1.0, 0.72, f);
+    // Na remontagem o caco volta ao tamanho de célula da capa reduzida, senão
+    // ficariam vãos entre eles e a capa apareceria furada.
+    scale = mix(scale, uCardScale, uReform);
 
     // Gira só enquanto voa; para de girar ao assentar na frase.
-    float spin = b * (1.0 - f) * 7.0 * (0.4 + aSeed);
+    float spin = b * (1.0 - f) * 7.0 * (0.4 + aSeed) * (1.0 - uReform);
     vec3 local = axisRot(aSpin, spin) * (position * scale);
 
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos + local, 1.0);
@@ -84,6 +100,7 @@ const FRAG = /* glsl */ `
   precision highp float;
 
   uniform sampler2D uMap;
+  uniform float uReform;
   varying vec2 vUv;
   varying float vForm;
 
@@ -96,7 +113,9 @@ const FRAG = /* glsl */ `
     // preservando a textura da capa mas garantindo contraste de leitura.
     float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
     vec3 hot = mix(vec3(0.62, 0.09, 0.17), vec3(1.0, 0.86, 0.78), lum * 1.5);
-    c.rgb = mix(c.rgb, hot, vForm * 0.9);
+    // O calor do rubi some na remontagem: a capa volta a ser a capa, com as
+    // cores do arquivo, porque é essa imagem que o player vai continuar.
+    c.rgb = mix(c.rgb, hot, vForm * 0.9 * (1.0 - uReform));
     gl_FragColor = c;
   }
 `
@@ -210,6 +229,8 @@ export function createCoverShatter(canvas, coverUrl) {
     uProgress: { value: 0 },
     uCell: { value: 1 / GRID },
     uTextScale: { value: 1 },
+    uReform: { value: 0 },
+    uCardScale: { value: 0.56 },
   }
 
   const material = new THREE.ShaderMaterial({
@@ -255,6 +276,8 @@ export function createCoverShatter(canvas, coverUrl) {
   return {
     setProgress(p) {
       uniforms.uProgress.value = p
+      // A remontagem ocupa os últimos 10% do percurso da seção.
+      uniforms.uReform.value = Math.min(Math.max((p - 0.9) / 0.1, 0), 1)
       // A câmera empurra durante a explosão e recua ao ler a frase — é o que
       // faz parecer movimento de câmera e não de objeto.
       camera.position.z = 4.7 - Math.sin(Math.min(Math.max(p, 0), 1) * Math.PI) * 0.9

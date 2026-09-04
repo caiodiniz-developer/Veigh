@@ -1,0 +1,62 @@
+/* ------------------------------------------------------- relógio de luz */
+
+/* Uma luz só governando os treze capítulos. A opacidade é baixa de propósito:
+   a direção de arte de cada seção continua mandando, e o relógio apenas dá a
+   elas um denominador fotográfico comum — como uma correção de cor faz num
+   filme sem apagar a fotografia de cada cena. */
+.evom-daylight {
+  position: fixed;
+  inset: 0;
+  z-index: 9985;
+  pointer-events: none;
+  opacity: 0.16;
+  /* soft-light tinge sem lavar: multiply escureceria tudo e screen estouraria
+     as seções claras. */
+  mix-blend-mode: soft-light;
+  transition: background-color 900ms linear;
+}
+
+/* --------------------------------------------------- borrão por velocidade */
+
+.evom-motion {
+  position: fixed;
+  inset: 0;
+  z-index: 9986;
+  pointer-events: none;
+  --evom-blur: 0px;
+  --evom-streak: 0;
+}
+
+/* backdrop-filter só existe enquanto a classe está posta. Deixá-lo declarado
+   com raio zero mantém a passada de composição rodando de graça o tempo todo,
+   numa página que já tem três cenas WebGL. */
+.evom-motion.is-active {
+  backdrop-filter: blur(var(--evom-blur));
+  -webkit-backdrop-filter: blur(var(--evom-blur));
+  will-change: backdrop-filter;
+}
+
+/* Faixa direcional por cima do borrão. backdrop-filter é isotrópico — não tem
+   direção — e é esta faixa vertical que devolve o eixo do movimento. */
+.evom-motion__streak {
+  position: absolute;
+  inset: 0;
+  opacity: var(--evom-streak);
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.05) 0px,
+    transparent 2px,
+    transparent 5px
+  );
+  mix-blend-mode: overlay;
+  transition: opacity 120ms linear;
+}
+
+/* Quem pede menos movimento não recebe borrão de scroll — é exatamente o tipo
+   de efeito que a preferência existe para desligar. O relógio de luz fica:
+   ele é cor, não movimento. */
+@media (prefers-reduced-motion: reduce) {
+  .evom-motion {
+    display: none;
+  }
+}

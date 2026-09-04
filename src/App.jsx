@@ -2,6 +2,7 @@ import { useState } from 'react'
 import CursorLayer from './components/CursorLayer.jsx'
 import GrainLayer from './components/GrainLayer.jsx'
 import CinemaLayer from './components/CinemaLayer.jsx'
+import AtmosphereLayer from './components/AtmosphereLayer.jsx'
 import Interlude from './components/Interlude.jsx'
 import IntroSequence from './components/IntroSequence.jsx'
 import ManifestoSection from './components/ManifestoSection.jsx'
@@ -26,6 +27,7 @@ export default function App() {
       {/* A intro agora vive no fluxo do documento: é a altura dela que dá o
           curso de scroll. O site continua logo abaixo, normalmente. */}
       <GrainLayer />
+      <AtmosphereLayer />
       <CinemaLayer />
       <CursorLayer />
 
