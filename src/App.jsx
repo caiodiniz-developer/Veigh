@@ -2,6 +2,7 @@ import { useState } from 'react'
 import IntroSequence from './components/IntroSequence.jsx'
 import ManifestoSection from './components/ManifestoSection.jsx'
 import HistorySection from './components/HistorySection.jsx'
+import TimelineSection from './components/TimelineSection.jsx'
 
 export default function App() {
   const [introSeen, setIntroSeen] = useState(false)
@@ -20,8 +21,12 @@ export default function App() {
         {/* Capítulo 2 — A História. Palco sticky próprio. */}
         <HistorySection />
 
-        {/* Placeholder: existe só pra demonstrar a troca de seção no fim da
-            intro. A hero real (capa do álbum + reveal no scroll) entra aqui. */}
+        {/* Capítulo 3 — a trajetória. Mecânica invertida em relação aos
+            capítulos anteriores: aqui o conteúdo rola e só o trilho fica preso. */}
+        <TimelineSection />
+
+        {/* Placeholder: os capítulos seguintes (eras, player, discografia,
+            galeria, clipes, shows, mundo, imprensa, final) entram aqui. */}
         <section className="next-section">
           <p className="next-section__eyebrow">Veigh</p>
           <h2 className="next-section__title">Eu Venci o Mundo</h2>
