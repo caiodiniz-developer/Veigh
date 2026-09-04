@@ -1,0 +1,60 @@
+.evom-motion {
+  position: fixed;
+  z-index: 9999;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: min(78vw, 320px);
+  pointer-events: none;
+}
+
+.evom-motion__btn {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 15px;
+  border: 1px solid rgba(237, 237, 237, 0.26);
+  border-radius: 999px;
+  background: rgba(12, 3, 6, 0.72);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 246, 231, 0.82);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.evom-motion__btn:hover,
+.evom-motion__btn:focus-visible {
+  color: #fff8ec;
+  border-color: rgba(196, 30, 58, 0.75);
+  background: rgba(20, 5, 10, 0.9);
+}
+
+.evom-motion__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(237, 237, 237, 0.35);
+}
+
+.evom-motion__dot.is-live {
+  background: #c41e3a;
+  box-shadow: 0 0 10px rgba(196, 30, 58, 0.9);
+}
+
+.evom-motion__hint {
+  pointer-events: none;
+  margin: 0;
+  padding: 0 4px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: rgba(245, 239, 230, 0.5);
+}

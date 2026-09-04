@@ -1,0 +1,290 @@
+.evom-player {
+  --evom-ruby: #c41e3a;
+  --evom-wine: #6e1423;
+  --evom-ink: #0a0305;
+  --evom-bone: #f5efe6;
+
+  position: relative;
+  isolation: isolate;
+  padding: 16vh 5vw 14vh;
+  background: var(--evom-ink);
+  color: var(--evom-bone);
+  overflow: clip;
+}
+
+/* Fundo reativo: a própria capa, ampliada e desfocada. Como só existe uma capa
+   de 447px, o blur pesado é o que permite usá-la em plano cheio sem que a
+   baixa resolução apareça — o desfoque destrói justamente a escala em que o
+   upscale seria visível. */
+.evom-player__bg {
+  position: absolute;
+  inset: -12%;
+  z-index: -2;
+  background-size: cover;
+  background-position: center;
+  filter: blur(64px) saturate(1.25);
+  opacity: 0.5;
+  transition: background-image 600ms ease;
+}
+
+.evom-player__bg-tint {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(110, 20, 35, 0.42) 0%, transparent 68%),
+    linear-gradient(180deg, var(--evom-ink) 0%, rgba(10, 3, 5, 0.72) 45%, var(--evom-ink) 100%);
+}
+
+.evom-player__head {
+  text-align: center;
+  margin-bottom: clamp(36px, 7vh, 78px);
+}
+
+.evom-player__eyebrow {
+  margin: 0 0 12px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.74rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: rgba(245, 239, 230, 0.45);
+}
+
+.evom-player__title {
+  margin: 0;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: clamp(2rem, 7vw, 5.2rem);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------- cover flow */
+
+.evom-player__stage {
+  position: relative;
+  height: clamp(300px, 46vh, 470px);
+  perspective: 1400px;
+  cursor: grab;
+  touch-action: pan-y; /* deixa a página rolar no vertical e o carrossel pegar o horizontal */
+  outline: none;
+}
+
+.evom-player__stage:active {
+  cursor: grabbing;
+}
+
+.evom-player__stage:focus-visible {
+  outline: 1px solid rgba(196, 30, 58, 0.8);
+  outline-offset: 12px;
+  border-radius: 4px;
+}
+
+.evom-player__track {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  display: grid;
+  place-items: center;
+}
+
+.evom-player__card {
+  grid-area: 1 / 1;
+  position: relative;
+  width: clamp(190px, 25vw, 310px);
+  aspect-ratio: 1 / 1;
+  transform-style: preserve-3d;
+  background: #14060a;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.7);
+  cursor: pointer;
+  will-change: transform, opacity;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.evom-player__card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* A capa é a mesma nas 16 faixas — quem diferencia o card é a tipografia.
+   Inventar arte por faixa seria inventar material que não existe. */
+.evom-player__card-face {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 30px 14px 12px;
+  background: linear-gradient(180deg, transparent 0%, rgba(6, 2, 4, 0.9) 62%);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+.evom-player__card-n {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  color: var(--evom-ruby);
+}
+
+.evom-player__card-title {
+  font-size: clamp(0.76rem, 1.1vw, 0.95rem);
+  letter-spacing: 0.02em;
+  color: var(--evom-bone);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evom-player__card.is-current {
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(196, 30, 58, 0.5);
+}
+
+.evom-player__drag-hint {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.64rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(245, 239, 230, 0.32);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- o player */
+
+.evom-player__bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: clamp(16px, 3vw, 46px);
+  width: min(94vw, 1020px);
+  margin: clamp(40px, 8vh, 86px) auto 0;
+  padding: clamp(16px, 2.4vh, 26px) clamp(18px, 3vw, 34px);
+  border: 1px solid rgba(245, 239, 230, 0.12);
+  border-radius: 3px;
+  background: rgba(10, 3, 5, 0.62);
+  backdrop-filter: blur(14px);
+}
+
+.evom-player__now-title {
+  margin: 0 0 5px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: clamp(1rem, 1.9vw, 1.5rem);
+  letter-spacing: -0.01em;
+}
+
+.evom-player__now-meta {
+  margin: 0;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(245, 239, 230, 0.45);
+}
+
+.evom-player__controls {
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 1.6vw, 20px);
+}
+
+.evom-player__nav,
+.evom-player__play {
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(245, 239, 230, 0.2);
+  background: transparent;
+  color: var(--evom-bone);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: transform 200ms ease, border-color 200ms ease, background 200ms ease;
+}
+
+.evom-player__nav {
+  width: 38px;
+  height: 38px;
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.evom-player__play {
+  width: 54px;
+  height: 54px;
+  font-size: 0.9rem;
+  background: var(--evom-ruby);
+  border-color: transparent;
+}
+
+.evom-player__nav:hover:not(:disabled),
+.evom-player__play:hover {
+  transform: scale(1.07);
+  border-color: rgba(196, 30, 58, 0.8);
+}
+
+.evom-player__nav:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+.evom-player__progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.68rem;
+  color: rgba(245, 239, 230, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+
+.evom-player__rail {
+  position: relative;
+  flex: 1;
+  height: 2px;
+  background: rgba(245, 239, 230, 0.16);
+  overflow: hidden;
+}
+
+/* scaleX em vez de width: a barra atualiza a cada frame enquanto toca, e
+   width dispararia layout 60 vezes por segundo. */
+.evom-player__fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, var(--evom-ruby), #e8c77e);
+  will-change: transform;
+}
+
+.evom-player__note {
+  margin: 22px auto 0;
+  max-width: 46ch;
+  text-align: center;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: rgba(245, 239, 230, 0.38);
+}
+
+.evom-player__reveal {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------- mobile */
+
+@media (max-width: 760px) {
+  .evom-player__bar {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+    gap: 18px;
+  }
+
+  .evom-player__progress {
+    width: 100%;
+  }
+}

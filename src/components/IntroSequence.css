@@ -319,3 +319,37 @@
     transition: none;
   }
 }
+
+/* ---------------------------------------------- modo calmo: o vídeo continua
+
+   Antes, este ramo removia o vídeo e deixava só o vinho chapado com as letras.
+   Numa máquina com os efeitos de animação do Windows desligados isso era o
+   site inteiro virando uma tela parada. Agora o clipe toca em loop atrás da
+   marca, e o que sai é só o movimento que incomoda: scrub, glitch, punch zoom
+   e a cena Three.js. */
+
+.evom-intro.is-static .evom-intro__video-wrap {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  filter: none;
+}
+
+/* Scrim: sem ele os pingentes e o verso disputam com o céu dourado do clipe. */
+.evom-intro.is-static .evom-intro__video-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(10, 3, 5, 0.32) 0%, rgba(10, 3, 5, 0.76) 78%),
+    linear-gradient(180deg, rgba(110, 20, 35, 0.34) 0%, rgba(61, 11, 22, 0.62) 100%);
+  pointer-events: none;
+}
+
+.evom-intro.is-static .evom-intro__letter {
+  filter: drop-shadow(0 14px 34px rgba(0, 0, 0, 0.85));
+}
+
+.evom-intro.is-static .evom-intro__char::before {
+  text-shadow: 0 0 30px rgba(10, 3, 5, 0.9), 0 6px 26px rgba(10, 3, 5, 0.8);
+}

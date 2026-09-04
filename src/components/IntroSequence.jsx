@@ -3,6 +3,7 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { createIntroBackground } from './introBackground.js'
 import { PENDANTS, VIDEOS } from '../assets.js'
+import { readMotionMode, CALM } from '../motion.js'
 import './IntroSequence.css'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -68,15 +69,7 @@ export default function IntroSequence({
   // aí a intro inteira vira o estado final estático, sem scrub. É o
   // comportamento correto, mas passe respectReducedMotion={false} pra forçar
   // a versão completa quando estiver revisando a animação.
-  const [reduced] = useState(() => {
-    if (!respectReducedMotion || typeof window === 'undefined') return false
-    // Escotilha de revisão: ?motion=full força a intro completa em qualquer máquina.
-    if (new URLSearchParams(window.location.search).get('motion') === 'full') return false
-    return (
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    )
-  })
+  const [reduced] = useState(() => respectReducedMotion && readMotionMode() === CALM)
   const [showSkip, setShowSkip] = useState(false)
 
   const rootRef = useRef(null)
@@ -129,8 +122,15 @@ export default function IntroSequence({
   // ----------------------------------------------------------- reduced motion
   useEffect(() => {
     if (!reduced) return
-    // Estado final direto: sem scrub, sem vídeo, sem cena Three.js. O verso
-    // aparece inteiro e parado — nada de escrita, nada de cursor.
+    // Modo calmo: o vídeo TOCA (em loop, sem scrub) e as letras e o verso
+    // ficam legíveis por cima dele. Nada de scrub, glitch, punch zoom ou cena
+    // Three.js — que é o que causa desconforto — mas a intro continua sendo
+    // uma intro, com imagem em movimento e a marca na tela.
+    const video = videoRef.current
+    if (video) {
+      const played = video.play()
+      if (played && typeof played.catch === 'function') played.catch(() => {})
+    }
     gsap.set(
       [
         ...lettersRef.current,
@@ -408,19 +408,21 @@ export default function IntroSequence({
       <div className="evom-intro__stage">
         <canvas ref={canvasRef} className="evom-intro__bg" aria-hidden="true" />
 
-        {!reduced && (
-          <div ref={videoWrapRef} className="evom-intro__video-wrap" aria-hidden="true">
-            <video
-              ref={videoRef}
-              className="evom-intro__video"
-              src={videoSrc}
-              muted
-              playsInline
-              preload="auto"
-              disablePictureInPicture
-            />
-          </div>
-        )}
+        {/* O vídeo existe nos dois modos. No modo completo ele é scrubado pelo
+            scroll; no calmo ele simplesmente toca em loop atrás das letras.
+            Sumir com ele deixava a intro sem imagem nenhuma. */}
+        <div ref={videoWrapRef} className="evom-intro__video-wrap" aria-hidden="true">
+          <video
+            ref={videoRef}
+            className="evom-intro__video"
+            src={videoSrc}
+            muted
+            playsInline
+            preload="auto"
+            disablePictureInPicture
+            {...(reduced ? { autoPlay: true, loop: true } : {})}
+          />
+        </div>
 
         <div ref={noiseRef} className="evom-intro__noise" aria-hidden="true" />
         <div ref={flashRef} className="evom-intro__flash" aria-hidden="true" />
