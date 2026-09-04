@@ -70,7 +70,6 @@ export default function IntroSequence({
   // comportamento correto, mas passe respectReducedMotion={false} pra forçar
   // a versão completa quando estiver revisando a animação.
   const [reduced] = useState(() => respectReducedMotion && readMotionMode() === CALM)
-  const [showSkip, setShowSkip] = useState(false)
 
   const rootRef = useRef(null)
   const canvasRef = useRef(null)
@@ -113,11 +112,6 @@ export default function IntroSequence({
     })
     return () => preloaded.forEach((img) => (img.src = ''))
   }, [letters])
-
-  useEffect(() => {
-    const timer = setTimeout(() => setShowSkip(true), 800)
-    return () => clearTimeout(timer)
-  }, [])
 
   // ----------------------------------------------------------- reduced motion
   useEffect(() => {
@@ -390,14 +384,6 @@ export default function IntroSequence({
     }
   }, [reduced, complete, onProgress, chars, scrubFps])
 
-  // Leva o usuário ao fim exato do trecho sticky — o documento segue dali.
-  const skip = useCallback(() => {
-    const root = rootRef.current
-    if (!root) return
-    const top =
-      root.getBoundingClientRect().top + window.scrollY + root.offsetHeight - window.innerHeight
-    window.scrollTo({ top, behavior: reduced ? 'auto' : 'smooth' })
-  }, [reduced])
 
   return (
     <section
@@ -478,15 +464,6 @@ export default function IntroSequence({
             </span>
           </p>
         </div>
-
-        <button
-          type="button"
-          className={`evom-intro__skip${showSkip ? ' is-visible' : ''}`}
-          onClick={skip}
-          tabIndex={showSkip ? 0 : -1}
-        >
-          Pular intro
-        </button>
       </div>
 
       {/* Split RGB do Ato 2. Só é aplicado ao vídeo durante o corte — manter o

@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import MotionToggle from './components/MotionToggle.jsx'
 import IntroSequence from './components/IntroSequence.jsx'
 import ManifestoSection from './components/ManifestoSection.jsx'
 import HistorySection from './components/HistorySection.jsx'
 import TimelineSection from './components/TimelineSection.jsx'
 import PlayerSection from './components/PlayerSection.jsx'
+import ShatterSection from './components/ShatterSection.jsx'
 
 export default function App() {
   const [introSeen, setIntroSeen] = useState(false)
@@ -13,8 +13,6 @@ export default function App() {
     <>
       {/* A intro agora vive no fluxo do documento: é a altura dela que dá o
           curso de scroll. O site continua logo abaixo, normalmente. */}
-      <MotionToggle />
-
       <IntroSequence onIntroComplete={() => setIntroSeen(true)} />
 
       <main className="site" data-intro-seen={introSeen}>
@@ -29,7 +27,11 @@ export default function App() {
             capítulos anteriores: aqui o conteúdo rola e só o trilho fica preso. */}
         <TimelineSection />
 
-        {/* Capítulo 4 — Ouça o projeto. Primeira seção guiada pela mão
+        {/* WOW 01 — a capa desmonta e os cacos remontam a frase. Cena WebGL
+            scrubada pelo scroll, entre a timeline e o player. */}
+        <ShatterSection />
+
+        {/* Capítulo 5 — Ouça o projeto. Primeira seção guiada pela mão
             (arrasto) em vez do scroll. */}
         <PlayerSection />
 

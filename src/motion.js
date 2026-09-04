@@ -33,6 +33,14 @@ export function systemPrefersReduced() {
  * sistema. A URL vem primeiro porque é a forma de revisar sem mexer em config.
  */
 export function readMotionMode() {
+  // DECISÃO DE PRODUTO: o site roda sempre no modo completo, por pedido
+  // explícito do dono. Isto desliga a acomodação a prefers-reduced-motion —
+  // quem tiver "Efeitos de animação" desligado no sistema recebe a experiência
+  // inteira mesmo assim. Para devolver a acomodação, basta remover este return
+  // e o resto da função volta a funcionar como estava.
+  return FULL
+
+  // eslint-disable-next-line no-unreachable
   if (typeof window === 'undefined') return CALM
 
   const fromUrl = new URLSearchParams(window.location.search).get('motion')
