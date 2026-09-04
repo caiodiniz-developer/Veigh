@@ -268,13 +268,24 @@ export default function ClipsSection() {
   return (
     <section ref={rootRef} className="evom-clips" aria-label="Clipes">
       <div className="evom-clips__stage">
-        {/* Fundo vivo: bokeh e feixes desfocados que respiram devagar. */}
-        <div className="evom-clips__ambience" aria-hidden="true">
-          {Array.from({ length: 14 }).map((_, i) => (
-            <span className="evom-clips__bokeh" key={i} style={{ '--i': i }} />
+        {/* O palco. Fundo, refletores, chão e fumaça rasteira — em camadas,
+            de trás para a frente, como a montagem real de um palco. */}
+        <div className="evom-clips__house" aria-hidden="true">
+          <span className="evom-clips__backwall" />
+
+          {/* Refletores: o cone é um trapézio com clip-path, não um gradiente
+              retangular. É o corte que faz ler como feixe saindo de uma fonte
+              pontual em vez de mancha vertical. */}
+          {[0, 1, 2, 3].map((i) => (
+            <span className="evom-clips__spot" key={i} style={{ '--i': i }} />
           ))}
-          <span className="evom-clips__beam evom-clips__beam--a" />
-          <span className="evom-clips__beam evom-clips__beam--b" />
+
+          <span className="evom-clips__floor" />
+          <span className="evom-clips__horizon" />
+
+          {[0, 1, 2].map((i) => (
+            <span className="evom-clips__fog" key={i} style={{ '--i': i }} />
+          ))}
         </div>
 
         <header className="evom-clips__head">
@@ -284,10 +295,10 @@ export default function ClipsSection() {
 
         <div ref={tapeRef} className="evom-clips__tape">
           {CLIPS.map((c, i) => (
+            <span className="evom-clips__slot" key={c.src}>
             <button
               type="button"
               className="evom-clips__card"
-              key={c.src}
               ref={(el) => {
                 cardRefs.current[i] = el
               }}
@@ -330,6 +341,11 @@ export default function ClipsSection() {
                 <span className="evom-clips__dur">{fmt(durations[i])}</span>
               </span>
             </button>
+
+            {/* Poça de luz e sombra de contato: é o que assenta o card NO
+                chão. Sem elas ele flutua e o palco vira papel de parede. */}
+            <span className="evom-clips__pool" aria-hidden="true" />
+            </span>
           ))}
         </div>
 
