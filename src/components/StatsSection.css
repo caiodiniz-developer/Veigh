@@ -1,0 +1,89 @@
+.evom-stats {
+  --evom-ruby: #c41e3a;
+  --evom-ink: #080204;
+  --evom-bone: #f5efe6;
+
+  position: relative;
+  background: linear-gradient(180deg, #0a0305 0%, var(--evom-ink) 50%, #0a0305 100%);
+  color: var(--evom-bone);
+  padding: 8vh 0;
+  overflow: clip;
+}
+
+.evom-stats__item {
+  position: relative;
+  min-height: 78vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(4px, 1vh, 14px);
+  padding: 0 4vw;
+  will-change: transform, opacity;
+}
+
+.evom-stats__num {
+  position: relative;
+  margin: 0;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: clamp(4.5rem, 21vw, 17rem);
+  line-height: 0.86;
+  letter-spacing: -0.05em;
+  color: var(--evom-bone);
+  font-variant-numeric: tabular-nums;
+}
+
+/* O primeiro número é uma janela para o vídeo.
+
+   background-clip: text não serve aqui: ele recorta uma imagem de FUNDO, e o
+   que está atrás é um elemento <video> vivo. A técnica que funciona é blend
+   multiply — o vídeo fica embaixo, e por cima vai uma camada preta com o
+   número em branco. multiply mantém o vídeo onde a camada é branca (o glifo) e
+   apaga para preto onde ela é preta. Resultado: vídeo correndo dentro do
+   algarismo, com o resto da tela preto. */
+.evom-stats__num.is-masked {
+  isolation: isolate; /* prende o blend dentro do número */
+  color: transparent;
+  width: min(92vw, 1100px);
+}
+
+.evom-stats__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.evom-stats__num.is-masked .evom-stats__num-text {
+  position: relative;
+  z-index: 1;
+  display: block;
+  background: #000;
+  color: #fff;
+  mix-blend-mode: multiply;
+}
+
+.evom-stats__label {
+  margin: 0;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: clamp(0.78rem, 1.5vw, 1.05rem);
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--evom-ruby);
+  will-change: transform;
+}
+
+/* Linha fina separando cada número: dá cadência de painel, não de lista. */
+.evom-stats__item + .evom-stats__item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: min(70vw, 620px);
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, rgba(245, 239, 230, 0.18), transparent);
+}
