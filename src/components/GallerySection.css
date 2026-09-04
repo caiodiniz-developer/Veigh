@@ -1,10 +1,23 @@
+/* --focus precisa ser uma custom property REGISTRADA.
+   Sem @property ela é um token sem tipo, e o valor substituído dentro dos
+   calc() de filter e transform fica preso no inicial — medido: a propriedade
+   computava 1 e o filtro continuava exibindo os valores de foco 0. Registrada
+   como <number>, ela passa a ser um valor tipado de verdade e ainda ganha
+   interpolação nativa, o que permite animar o próprio --focus em vez de
+   animar as strings de filter e transform. */
+@property --focus {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
 .evom-wall {
   --evom-ruby: #c41e3a;
-  --evom-ink: #080204;
+  --evom-ink: #060204;
   --evom-bone: #f5efe6;
 
   position: relative;
-  background: radial-gradient(ellipse at 50% 30%, #1a070d 0%, var(--evom-ink) 70%);
+  background: var(--evom-ink);
   color: var(--evom-bone);
 }
 
@@ -13,36 +26,74 @@
   height: 100vh;
   height: 100svh;
   overflow: hidden;
+  isolation: isolate;
 }
+
+/* ------------------------------------------------------- o vidro da mesa */
+
+.evom-wall__glass {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--evom-ink);
+}
+
+/* A luz vem de baixo do vidro, não de cima da sala. É essa inversão que faz
+   a superfície ler como mesa de luz e não como parede iluminada. */
+.evom-wall__backlight {
+  position: absolute;
+  inset: 12% 6% 10% 6%;
+  border-radius: 6px;
+  background:
+    radial-gradient(ellipse at 50% 55%, rgba(255, 246, 232, 0.92) 0%, rgba(255, 236, 214, 0.6) 42%, rgba(214, 178, 150, 0.18) 74%, transparent 92%);
+  box-shadow: 0 0 120px rgba(255, 232, 202, 0.28);
+}
+
+/* Vidro fosco: a textura finíssima por cima impede que o backlight vire um
+   degradê liso de Photoshop. */
+.evom-wall__frost {
+  position: absolute;
+  inset: 12% 6% 10% 6%;
+  border-radius: 6px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23f)' opacity='0.6'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+  opacity: 0.28;
+  border: 1px solid rgba(255, 244, 226, 0.25);
+}
+
+/* ---------------------------------------------------------------- rótulos */
 
 .evom-wall__eyebrow,
 .evom-wall__hint {
   position: absolute;
-  z-index: 3;
+  z-index: 4;
   margin: 0;
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 0.72rem;
   letter-spacing: 0.4em;
   text-transform: uppercase;
   pointer-events: none;
+  /* Texto escuro: o fundo aqui é claro, ao contrário do resto do site. */
+  color: rgba(28, 12, 10, 0.6);
 }
 
 .evom-wall__eyebrow {
-  top: clamp(20px, 5vh, 54px);
+  top: clamp(20px, 5vh, 48px);
   left: clamp(20px, 5vw, 72px);
-  color: rgba(245, 239, 230, 0.45);
 }
 
 .evom-wall__hint {
-  bottom: clamp(20px, 5vh, 48px);
+  bottom: clamp(18px, 4vh, 40px);
   left: 50%;
   transform: translateX(-50%);
-  color: rgba(245, 239, 230, 0.3);
+  font-size: 0.62rem;
+  letter-spacing: 0.24em;
+  color: rgba(28, 12, 10, 0.42);
 }
 
-/* A superfície é mais larga que a tela. --drag é o deslocamento do arrasto,
-   somado ao x que o ScrollTrigger aplica — separar os dois em propriedades
-   diferentes evita que um sobrescreva o outro. */
+/* ------------------------------------------------------------- os slides */
+
 .evom-wall__surface {
   --drag: 0;
   position: absolute;
@@ -58,23 +109,34 @@
   cursor: grabbing;
 }
 
+/* Cada foto é um slide sobre o vidro: moldura clara fina, sombra curta —
+   objeto pousado, não pendurado. */
 .evom-wall__shot {
+  --focus: 0;
+
   position: absolute;
   margin: 0;
   width: clamp(120px, 13vw, 220px);
-  padding: 8px 8px 26px;
-  background: #ece6dc;
-  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.66);
-  transform: rotate(var(--rot)) scale(var(--scale));
-  transition: transform 420ms cubic-bezier(0.22, 0.9, 0.3, 1), box-shadow 420ms ease;
-  will-change: transform;
-}
+  padding: 7px 7px 20px;
+  background: rgba(252, 248, 240, 0.9);
+  /* A sombra encurta conforme a foto entra em foco: dentro da lupa ela está
+     "levantada" e mais perto do olho. */
+  box-shadow: 0 calc(6px + (1 - var(--focus)) * 12px) calc(14px + (1 - var(--focus)) * 22px)
+    rgba(40, 16, 12, calc(0.28 + (1 - var(--focus)) * 0.2));
 
-/* Hover aproxima e endireita: a foto "sai da parede" para ser olhada. */
-.evom-wall__shot:hover {
-  transform: rotate(0deg) scale(calc(var(--scale) * 1.16));
-  box-shadow: 0 34px 80px rgba(0, 0, 0, 0.8);
-  z-index: 5;
+  transform: rotate(var(--rot)) scale(calc(var(--scale) * (1 + var(--focus) * 0.14)));
+
+  /* Fora da lupa a foto é descarte: desfocada, dessaturada e apagada.
+     Dentro, ganha nitidez, cor e brilho. Tudo dirigido por --focus. */
+  filter:
+    blur(calc((1 - var(--focus)) * 2.6px))
+    saturate(calc(0.35 + var(--focus) * 0.85))
+    brightness(calc(0.72 + var(--focus) * 0.42));
+
+  /* Anima o valor, não as strings: com --focus registrado o navegador
+     interpola um número só, e filter, transform e sombra acompanham juntos. */
+  transition: --focus 200ms ease-out;
+  will-change: transform, filter;
 }
 
 .evom-wall__shot img {
@@ -82,9 +144,32 @@
   width: 100%;
   aspect-ratio: 3 / 4;
   object-fit: cover;
-  background: #1a0a0e;
+  background: #d8cec2;
   -webkit-user-drag: none;
 }
+
+/* ------------------------------------------------------------------ lupa */
+
+/* Só o anel — o aumento real acontece nas fotos, via --focus. Um anel com
+   backdrop-filter aqui duplicaria o custo sem melhorar a leitura. */
+.evom-wall__loupe {
+  position: fixed;
+  z-index: 5;
+  top: 0;
+  left: 0;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  pointer-events: none;
+  border: 1px solid rgba(255, 250, 240, 0.5);
+  box-shadow:
+    inset 0 0 60px rgba(255, 244, 224, 0.35),
+    0 0 40px rgba(255, 238, 210, 0.25);
+  background: radial-gradient(circle, rgba(255, 250, 240, 0.06) 0%, transparent 68%);
+  will-change: transform;
+}
+
+/* --------------------------------------------------------------- mobile */
 
 @media (max-width: 760px) {
   .evom-wall__surface {
@@ -93,5 +178,22 @@
 
   .evom-wall__shot {
     width: 34vw;
+    /* Sem cursor não há lupa, então os slides ficam legíveis por padrão —
+       um mural inteiro fora de foco no celular seria só borrão. */
+    --focus: 0.72;
+  }
+
+  .evom-wall__loupe {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .evom-wall__shot {
+    --focus: 0.72;
+  }
+
+  .evom-wall__loupe {
+    display: none;
   }
 }
