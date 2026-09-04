@@ -1,0 +1,167 @@
+.evom-manifesto {
+  --evom-wine: #6e1423;
+  --evom-wine-deep: #3d0b16;
+  --evom-ink: #0a0305;
+  --evom-bone: #f5efe6;
+
+  position: relative;
+  width: 100%;
+  background: var(--evom-ink);
+}
+
+/* Mesmo padrão da intro e da história: sticky em vez de pin do ScrollTrigger —
+   sem pin-spacing injetado e sem o salto do unpin no último frame. */
+.evom-manifesto__stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse at 50% 60%, rgba(110, 20, 35, 0.5) 0%, transparent 62%),
+    var(--evom-ink);
+}
+
+/* ---------------------------------------------------------- a fotografia */
+
+.evom-manifesto__reveal {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  /* auto 100% em vez de cover: a caixa é a viewport inteira (landscape), mas a
+     foto é retrato. Com cover ela seria escalada pela largura da caixa e
+     ampliada 2,2x; com auto 100% ela é desenhada na altura da viewport e
+     ~506px de largura — abaixo dos 1152px do arquivo, ou seja, reduzindo. */
+  background-position: center center;
+  background-size: auto 100%;
+  background-repeat: no-repeat;
+  /* Começa fechado na faixa do texto; o GSAP abre até inset(0). */
+  clip-path: inset(44% 32% 44% 32%);
+  box-shadow: 0 0 0 1px rgba(245, 239, 230, 0.14), 0 40px 120px rgba(0, 0, 0, 0.75);
+  opacity: 0;
+  visibility: hidden;
+  will-change: clip-path, opacity;
+}
+
+/* A foto é pequena (1152px de largura) para um plano cheio. O grain e o leve
+   escurecimento não são só estética: quebram a suavidade do upscale, que é o
+   que mais denuncia imagem ampliada. */
+.evom-manifesto__reveal::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)' opacity='0.5'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+.evom-manifesto__vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  background: radial-gradient(
+    ellipse at 50% 45%,
+    transparent 34%,
+    rgba(10, 3, 5, 0.55) 78%,
+    rgba(10, 3, 5, 0.92) 100%
+  );
+}
+
+/* ---------------------------------------------------------- a tipografia */
+
+/* As frases ocupam o mesmo lugar: só uma está visível por vez, e empilhá-las
+   em grid (em vez de position:absolute) mantém o alinhamento sem tirar nenhuma
+   do fluxo — a caixa se dimensiona pela frase mais larga. */
+.evom-manifesto__type {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: min(92vw, 1180px);
+  padding: 0 4vw;
+}
+
+.evom-manifesto__phrase {
+  grid-area: 1 / 1;
+  margin: 0;
+  text-align: center;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: clamp(2rem, 7.4vw, 6.2rem);
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  color: var(--evom-bone);
+  text-wrap: balance;
+  will-change: transform, opacity;
+
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* A frase-janela: o texto é recortado sobre a fotografia. O fallback importa —
+   sem background-clip o texto ficaria transparente e sumiria, então a cor só
+   vira transparente dentro do @supports. */
+.evom-manifesto__phrase--masked {
+  background-position: center 20%;
+  background-size: cover;
+  background-repeat: no-repeat;
+  text-shadow: none;
+}
+
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  .evom-manifesto__phrase--masked {
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    /* Um contorno finíssimo segura a leitura quando a região da foto atrás da
+       letra é escura demais — sem ele, palavras inteiras somem no preto. */
+    -webkit-text-stroke: 0.5px rgba(245, 239, 230, 0.28);
+  }
+}
+
+/* ------------------------------------------------- prefers-reduced-motion */
+
+/* Sem sticky, sem scrub: as frases viram um bloco legível e a foto aparece
+   inteira embaixo. A narrativa sobrevive sem movimento nenhum. */
+.evom-manifesto.is-static .evom-manifesto__stage {
+  position: relative;
+  height: auto;
+  min-height: 100vh;
+  flex-direction: column;
+  gap: 6vh;
+  padding: 12vh 0;
+}
+
+.evom-manifesto.is-static .evom-manifesto__type {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(14px, 3vh, 34px);
+}
+
+.evom-manifesto.is-static .evom-manifesto__phrase {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  font-size: clamp(1.6rem, 5vw, 3.4rem);
+}
+
+.evom-manifesto.is-static .evom-manifesto__reveal {
+  position: relative;
+  clip-path: none;
+  opacity: 1;
+  visibility: visible;
+  width: min(92vw, 900px);
+  aspect-ratio: 16 / 10;
+  border-radius: 2px;
+}
+
+.evom-manifesto.is-static .evom-manifesto__vignette {
+  display: none;
+}

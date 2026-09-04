@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { VIDEOS } from '../assets.js'
 import './HistorySection.css'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -53,8 +54,8 @@ const COPY = [
 export default function HistorySection({
   // Atenção: o arquivo é minúsculo. Servidor Linux é case-sensitive e
   // "Video-sessao1.mp4" daria 404 em produção mesmo funcionando no Windows.
-  videoSrc = '/video-sessao1.mp4',
-  poster = '/video-sessao1-poster.jpg',
+  videoSrc = VIDEOS.sessao1,
+  poster = VIDEOS.sessao1Poster,
   beats = COPY,
   height = '440vh',
   respectReducedMotion = true,

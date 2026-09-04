@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { createIntroBackground } from './introBackground.js'
+import { PENDANTS, VIDEOS } from '../assets.js'
 import './IntroSequence.css'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -47,7 +48,7 @@ const caretBlink = (p) => (p < 0.7 ? 0 : 1)
 // Só acorda a cena Three.js perto do corte: durante o scrub do vídeo ela ficaria
 // disputando frame com a decodificação, que é o trecho mais caro da intro.
 const BG_WAKE = 0.52 // progresso em que a cena Three.js começa a renderizar
-const DEFAULT_LETTERS = ['/e.png', '/v.png', '/o.png', '/m.png']
+const DEFAULT_LETTERS = PENDANTS
 
 export default function IntroSequence({
   onIntroComplete,
@@ -55,7 +56,7 @@ export default function IntroSequence({
   // Versão all-intra (keyframe em todo frame) do clipe. É ela que torna o
   // scrub fluido: cada currentTime vira acesso direto, sem decodificar a
   // cadeia de frames desde o keyframe anterior. Ver public/README-video.md.
-  videoSrc = '/hero-scrub.mp4',
+  videoSrc = VIDEOS.heroScrub,
   scrubFps = 30, // fps do arquivo acima — usado pra quantizar o seek
   letters = DEFAULT_LETTERS,
   manifesto = 'Eu Venci o Mundo.',

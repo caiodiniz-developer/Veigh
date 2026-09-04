@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import IntroSequence from './components/IntroSequence.jsx'
+import ManifestoSection from './components/ManifestoSection.jsx'
 import HistorySection from './components/HistorySection.jsx'
 
 export default function App() {
@@ -12,7 +13,11 @@ export default function App() {
       <IntroSequence onIntroComplete={() => setIntroSeen(true)} />
 
       <main className="site" data-intro-seen={introSeen}>
-        {/* Seção 1 — A História. Palco sticky próprio, logo abaixo da intro. */}
+        {/* Capítulo 1 — o manifesto tipográfico. As letras da última frase
+            abrem e revelam a fotografia que vira o fundo do próximo capítulo. */}
+        <ManifestoSection />
+
+        {/* Capítulo 2 — A História. Palco sticky próprio. */}
         <HistorySection />
 
         {/* Placeholder: existe só pra demonstrar a troca de seção no fim da
