@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { VIDEOS } from '../assets.js'
+import { createSky } from './skyScene.js'
 import './StatsSection.css'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -31,6 +31,7 @@ const STATS = [
 
 export default function StatsSection() {
   const rootRef = useRef(null)
+  const skyRef = useRef(null)
 
   useEffect(() => {
     const root = rootRef.current
@@ -70,15 +71,37 @@ export default function StatsSection() {
       })
     }, root)
 
-    return () => ctx.revert()
+    // O céu: renderiza só enquanto a seção está na tela, e o sol sobe com o
+    // progresso do scroll.
+    const sky = createSky(skyRef.current)
+    let st = null
+    if (sky) {
+      st = ScrollTrigger.create({
+        trigger: root,
+        start: 'top bottom',
+        end: 'bottom top',
+        onUpdate: (self) => sky.setProgress(self.progress),
+        onToggle: (self) => (self.isActive ? sky.start() : sky.stop()),
+      })
+      if (st.isActive) sky.start()
+    }
+
+    return () => {
+      st?.kill()
+      sky?.dispose()
+      ctx.revert()
+    }
   }, [])
 
   return (
     <section ref={rootRef} className="evom-stats" aria-label="Números">
-      {/* O céu corre atrás de tudo, em câmera lenta e desfocado: é ambiente,
-          não é o assunto. O vídeo é o mesmo da intro, já all-intra. */}
-      <div className="evom-stats__sky" aria-hidden="true">
-        <video src={VIDEOS.heroScrub} muted loop playsInline autoPlay preload="metadata" />
+      {/* O céu vive DENTRO da seção: wrapper absoluto do tamanho dela, com o
+          canvas em sticky por dentro. A versão anterior usava position: fixed
+          e o céu vazou para a página inteira — fixed se prende à viewport, e o
+          clip-path que eu tinha posto estava no próprio elemento fixo, onde
+          não contém nada. */}
+      <div className="evom-stats__skywrap" aria-hidden="true">
+        <canvas ref={skyRef} className="evom-stats__sky" />
         <span className="evom-stats__haze" />
       </div>
 
