@@ -53,6 +53,10 @@
   inset: 0;
   overflow: hidden;
   transform: scale(calc(0.40 + var(--era) * 0.60));
+  /* Cresce a partir de um ponto fora do centro. Escalar do meio devolve uma
+     moldura centralizada — e é a centralização que deixa tudo com cara de
+     template. */
+  transform-origin: 74% 38%;
   border-radius: calc((1 - var(--era)) * 6px);
   box-shadow:
     0 0 0 calc((1 - var(--era)) * 1px) rgba(245, 239, 230, 0.2),
@@ -113,13 +117,19 @@
   position: relative;
   z-index: 2;
   width: 100%;
-  padding-inline: clamp(22px, 6vw, 96px);
+  /* Sem padding lateral: quem sangra precisa alcançar a borda de verdade. O
+     respiro passa a ser responsabilidade de cada peça. */
   padding-block: 10vh;
 }
 
 .evom-history__beats {
   position: relative;
-  width: var(--evom-history-column);
+  /* Largura da tela, não de uma coluna.
+     A coluna existia para o parágrafo antigo. Com a palavra sangrando pela
+     borda e o marcador colado na borda oposta, o quadro da composição TEM que
+     ser o palco — presos na coluna, os marcadores caíam no meio da tela e
+     colidiam com a própria palavra. */
+  width: 100%;
   max-width: 100%;
   /* Reserva a altura do beat mais longo. Os beats são absolutos e ancorados no
      topo desta caixa, então a primeira linha nasce sempre no mesmo y — é o que
@@ -330,62 +340,110 @@
   90%, 100% { translate: 0 0; }
 }
 
-/* ------------------------------------------------------------- o dossiê */
+/* ------------------------------------------------- tipografia brutalista
 
-.evom-history__tag {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  margin: 0 0 18px;
+   O oposto da ficha que estava aqui antes. Sem rótulo em caixa alta espaçado,
+   sem linha divisória, sem coluna alinhada, sem nada centralizado — esse
+   conjunto é exatamente o que faz um layout parecer gerado por máquina.
+
+   Aqui manda a escala. A palavra é grande a ponto de não caber e sangra pela
+   borda da tela; o marcador temporal fica deitado na vertical do lado oposto;
+   o detalhe é minúsculo perto dela. A tipografia atravessa a imagem em vez de
+   sentar ao lado dela. */
+
+.evom-history__beat {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  pointer-events: none;
+}
+
+/* A palavra sangra. clamp com vw agressivo: em tela larga ela passa de 200px
+   e é cortada pela borda de propósito — texto que não cabe é o que diferencia
+   composição editorial de caixa de conteúdo. */
+.evom-history__word {
+  margin: 0;
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: 0.74rem;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
+  font-weight: 500;
+  font-size: clamp(3.2rem, 13.5vw, 13rem);
+  line-height: 0.82;
+  letter-spacing: -0.055em;
   color: #f5efe6;
+  text-wrap: balance;
+  /* Mistura sobre a imagem em vez de flutuar por cima: onde o vídeo é claro a
+     palavra escurece, onde é escuro ela acende. Ela pertence ao plano. */
+  mix-blend-mode: difference;
 }
 
-.evom-history__n {
-  font-variant-numeric: tabular-nums;
+.evom-history__beat.is-left .evom-history__word {
+  padding-left: clamp(18px, 4vw, 68px);
+  padding-right: 18vw;
+  text-align: left;
+}
+
+.evom-history__beat.is-right .evom-history__word {
+  padding-right: clamp(18px, 4vw, 68px);
+  padding-left: 22vw;
+  text-align: right;
+}
+
+/* O marcador deitado, colado na borda oposta à palavra. */
+.evom-history__mark {
+  position: absolute;
+  top: 50%;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: clamp(0.9rem, 1.6vw, 1.4rem);
+  letter-spacing: 0.5em;
   color: #c41e3a;
+  writing-mode: vertical-rl;
+  translate: 0 -50%;
 }
 
-.evom-history__fields {
-  margin: 0;
-  display: grid;
-  gap: 12px;
+.evom-history__beat.is-left .evom-history__mark {
+  right: clamp(14px, 3vw, 44px);
 }
 
-/* Rótulo e valor em colunas: é o alinhamento que faz ler como ficha em vez de
-   lista. A coluna do rótulo é fixa para os valores começarem no mesmo x. */
-.evom-history__row {
-  display: grid;
-  grid-template-columns: 5.5rem 1fr;
-  gap: 16px;
-  align-items: baseline;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(245, 239, 230, 0.12);
+.evom-history__beat.is-right .evom-history__mark {
+  left: clamp(14px, 3vw, 44px);
+  rotate: 180deg;
 }
 
-.evom-history__row dt {
-  margin: 0;
+/* O detalhe é pequeno perto da palavra — e é o contraste de corpo que sustenta
+   a composição, não um alinhamento. */
+.evom-history__detail {
+  margin: clamp(14px, 2.4vh, 30px) 0 0;
+  max-width: 34ch;
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: 0.6rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgba(245, 239, 230, 0.42);
+  font-size: clamp(0.86rem, 1.15vw, 1.02rem);
+  line-height: 1.5;
+  color: rgba(245, 239, 230, 0.62);
 }
 
-.evom-history__row dd {
-  margin: 0;
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: clamp(0.95rem, 1.5vw, 1.2rem);
-  line-height: 1.4;
-  color: rgba(245, 239, 230, 0.92);
+.evom-history__beat.is-left .evom-history__detail {
+  margin-left: clamp(20px, 4.4vw, 74px);
+}
+
+/* Desalinhado de propósito: o detalhe não encosta na borda em que a palavra
+   sangra. Simetria exata é o outro sintoma do layout automático. */
+.evom-history__beat.is-right .evom-history__detail {
+  justify-self: end;
+  margin-right: 8vw;
+  text-align: right;
 }
 
 @media (max-width: 640px) {
-  .evom-history__row {
-    grid-template-columns: 1fr;
-    gap: 4px;
+  .evom-history__word {
+    font-size: clamp(2.4rem, 15vw, 4.4rem);
+  }
+
+  .evom-history__beat.is-left .evom-history__word,
+  .evom-history__beat.is-right .evom-history__word {
+    padding: 0 8vw;
+  }
+
+  .evom-history__mark {
+    font-size: 0.7rem;
   }
 }

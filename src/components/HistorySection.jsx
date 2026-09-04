@@ -45,38 +45,40 @@ const BEATS = [
 const SLIDE_IN = 22 // yPercent de onde o beat nasce
 const SLIDE_OUT = -14 // yPercent pra onde ele sai
 
-// O MESMO conteúdo aprovado, reorganizado em campos. Nenhum fato novo entrou:
-// tudo aqui já estava na prosa anterior. O que muda é a forma — ficha, não
-// parágrafo. Não pus coordenadas nem números que eu não tivesse de origem.
+// Os mesmos fatos, mas o que manda agora é a ESCALA, não o alinhamento.
+//
+// A versão anterior era uma ficha: rótulo minúsculo em caixa alta espaçado,
+// valor alinhado, linha fina separando, tudo simétrico. Isso virou a assinatura
+// visual de layout gerado por máquina — e o dono do site reconheceu na hora.
+//
+// Aqui cada bloco tem uma palavra enorme que sangra pela borda da tela, um
+// marcador temporal deitado na vertical do outro lado, e o detalhe em corpo
+// pequeno espremido embaixo. Nada centralizado, nada alinhado com nada, e a
+// tipografia atravessa a imagem em vez de sentar educadamente ao lado dela.
 const COPY = [
   {
-    tag: 'Origem',
-    fields: [
-      ['Local', 'Itapevi, zona oeste · São Paulo'],
-      ['Data', '12.09.2001'],
-    ],
+    word: 'ITAPEVI',
+    mark: '2001',
+    detail: 'Zona oeste de São Paulo. 12 de setembro.',
+    anchor: 'left',
   },
   {
-    tag: 'Antes',
-    fields: [
-      ['Emprego', 'Telemarketing, Alphaville'],
-      ['Estúdio', 'Centro de São Paulo, à noite'],
-    ],
+    word: 'TELEMARKETING',
+    mark: 'ANTES',
+    detail: 'Alphaville de dia. Estúdio no Centro, de madrugada.',
+    anchor: 'right',
   },
   {
-    tag: '2022',
-    fields: [
-      ['Álbum', 'Dos Prédios'],
-      ['Marca', 'O disco de trap nacional mais ouvido do Brasil'],
-    ],
+    word: 'DOS PRÉDIOS',
+    mark: '2022',
+    detail: 'O disco de trap nacional mais ouvido do Brasil.',
+    anchor: 'left',
   },
   {
-    tag: 'Hoje',
-    fields: [
-      ['Streams', '5 bilhões+'],
-      ['Imprensa', 'Forbes Under 30'],
-      ['Agora', 'Eu Venci o Mundo'],
-    ],
+    word: '5 BILHÕES',
+    mark: 'HOJE',
+    detail: 'Forbes Under 30. E um novo capítulo: Eu Venci o Mundo.',
+    anchor: 'right',
   },
 ]
 
@@ -281,8 +283,8 @@ export default function HistorySection({
           {!reduced && (
             <div className="evom-history__sr-only">
               {beats.map((rec) => (
-                <p key={rec.tag}>
-                  {rec.tag}. {rec.fields.map(([k, v]) => `${k}: ${v}.`).join(' ')}
+                <p key={rec.word}>
+                  {rec.mark}. {rec.word}. {rec.detail}
                 </p>
               ))}
             </div>
@@ -290,22 +292,14 @@ export default function HistorySection({
 
           <div className="evom-history__beats" aria-hidden={!reduced}>
             {beats.map((rec, index) => (
-              <div key={rec.tag} ref={setBeatRef(index)} className="evom-history__beat">
-                <p className="evom-history__tag">
-                  <span className="evom-history__n">
-                    {String(index + 1).padStart(2, '0')}/{String(beats.length).padStart(2, '0')}
-                  </span>
-                  {rec.tag}
-                </p>
-
-                <dl className="evom-history__fields">
-                  {rec.fields.map(([k, v]) => (
-                    <div className="evom-history__row" key={k}>
-                      <dt>{k}</dt>
-                      <dd>{v}</dd>
-                    </div>
-                  ))}
-                </dl>
+              <div
+                key={rec.word}
+                ref={setBeatRef(index)}
+                className={`evom-history__beat is-${rec.anchor}`}
+              >
+                <span className="evom-history__mark">{rec.mark}</span>
+                <p className="evom-history__word">{rec.word}</p>
+                <p className="evom-history__detail">{rec.detail}</p>
               </div>
             ))}
           </div>
