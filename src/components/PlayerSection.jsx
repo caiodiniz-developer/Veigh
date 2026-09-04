@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { CAPAS, TRACKLIST } from '../assets.js'
+import { CAPAS, TRACKLIST, spotifyForTrack, spotifyForAlbum } from '../assets.js'
 import { readMotionMode, CALM } from '../motion.js'
 import './PlayerSection.css'
 
@@ -70,6 +70,7 @@ export default function PlayerSection() {
         n: String(i + 1).padStart(2, '0'),
         cover: CAPAS.euVenciOMundo,
         previewSrc: PREVIEWS[title] || null,
+        spotify: spotifyForTrack(title),
       })),
     []
   )
@@ -348,14 +349,21 @@ export default function PlayerSection() {
               ‹
             </button>
 
-            <button
-              type="button"
+            {/* Sem arquivo de áudio no projeto, o botão principal deixa de
+                simular reprodução e passa a levar para o Spotify — uma ação
+                que cumpre o que promete. A barra e a waveform continuam como
+                leitura visual da faixa. */}
+            <a
               className="evom-player__play"
-              onClick={() => setPlaying((p) => !p)}
-              aria-label={playing ? 'Pausar' : 'Tocar'}
+              href={current.spotify}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Ouvir ${current.title} no Spotify`}
             >
-              {playing ? '❚❚' : '▶'}
-            </button>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path d="M8 5v14l11-7z" fill="currentColor" />
+              </svg>
+            </a>
 
             <button
               type="button"
@@ -370,12 +378,11 @@ export default function PlayerSection() {
         </div>
       </div>
 
-      {!current.previewSrc && (
-        <p className="evom-player__note evom-player__reveal">
-          Prévias de áudio não disponíveis neste projeto — o player está completo,
-          só sem som.
-        </p>
-      )}
+      <p className="evom-player__note evom-player__reveal">
+        <a href={spotifyForAlbum()} target="_blank" rel="noopener noreferrer">
+          Ouvir o álbum completo no Spotify
+        </a>
+      </p>
 
       {current.previewSrc && <audio ref={audioRef} src={current.previewSrc} preload="none" />}
     </section>

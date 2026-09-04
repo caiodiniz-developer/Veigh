@@ -78,3 +78,34 @@ export const ALL_ASSETS = [
   ...SHOWS,
   ...CLIPES,
 ]
+
+/**
+ * Links para streaming.
+ *
+ * Não tenho os IDs reais do artista, do álbum nem das faixas no Spotify, e
+ * inventar um ID leva a uma página errada ou a um 404. Então o padrão é a
+ * busca do próprio Spotify, que resolve sempre e abre no app quando instalado.
+ *
+ * Quando você tiver os links reais, preencha ARTIST/ALBUM e o mapa TRACK_URLS
+ * (título da faixa -> URL). Quem tiver link direto passa a usar o link; quem
+ * não tiver continua caindo na busca. Nenhuma outra mudança é necessária.
+ */
+export const SPOTIFY = {
+  ARTIST: null, // ex.: 'https://open.spotify.com/artist/xxxxxxxx'
+  ALBUM: null, // ex.: 'https://open.spotify.com/album/xxxxxxxx'
+  TRACK_URLS: {
+    // 'Taylor': 'https://open.spotify.com/track/xxxxxxxx',
+  },
+}
+
+/** URL de busca do Spotify para um termo. */
+export const spotifySearch = (query) =>
+  `https://open.spotify.com/search/${encodeURIComponent(query)}`
+
+/** Melhor link disponível para uma faixa: direto se existir, busca se não. */
+export const spotifyForTrack = (title) =>
+  SPOTIFY.TRACK_URLS[title] || spotifySearch(`Veigh ${title}`)
+
+/** Melhor link disponível para o álbum. */
+export const spotifyForAlbum = () =>
+  SPOTIFY.ALBUM || spotifySearch('Veigh Eu Venci o Mundo')
