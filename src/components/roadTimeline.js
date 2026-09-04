@@ -24,6 +24,72 @@ const ROAD_LEN = 420
 const CELL = 256
 const COLS = 6
 
+const SKY_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }
+`
+
+const SKY_FRAG = /* glsl */ `
+  precision highp float;
+  uniform vec3 uLight;
+  uniform vec3 uFog;
+  uniform float uTime;
+  uniform vec2 uRes;
+  varying vec2 vUv;
+
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+  float noise(vec2 p) {
+    vec2 i = floor(p); vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+  }
+
+  float fbm(vec2 p) {
+    float v = 0.0; float a = 0.5;
+    for (int i = 0; i < 4; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; }
+    return v;
+  }
+
+  void main() {
+    vec2 p = vec2((vUv.x - 0.5) * (uRes.x / max(uRes.y, 1.0)), vUv.y);
+
+    // A LINHA DO HORIZONTE.
+    //
+    // Na primeira versão o céu era um degradê da base para o topo, e o clarão
+    // caía no rodapé da tela: as laterais fora do asfalto viravam chão âmbar,
+    // como se a rua flutuasse sobre luz. A câmera olha na horizontal, então o
+    // horizonte fica na metade da tela — abaixo dele é terra, não céu.
+    const float HORIZON = 0.5;
+    float above = smoothstep(HORIZON - 0.015, HORIZON + 0.015, vUv.y);
+    float up = clamp((vUv.y - HORIZON) / (1.0 - HORIZON), 0.0, 1.0);
+
+    // Céu: incandescente na linha, escurecendo para o alto. Fim de tarde, que
+    // é o que deixa a cena clara sem apagar as janelas acesas da cidade.
+    vec3 dusk = vec3(0.055, 0.045, 0.085) + uFog * 1.2;
+    vec3 glow = uLight * 1.5;
+    vec3 sky = mix(glow, dusk, pow(up, 0.62));
+
+    // Nuvens em faixa, achatadas na vertical e arrastando devagar: nuvem de
+    // horizonte é banda, não bola.
+    vec2 q = vec2(p.x * 0.9 + uTime * 0.006, vUv.y * 4.2);
+    float cloud = fbm(q + fbm(q * 0.6) * 0.6);
+    cloud *= smoothstep(0.42, 0.0, up);
+    sky = mix(sky, glow * 1.3, smoothstep(0.44, 0.8, cloud) * 0.5);
+
+    // Terra: escura, com só um resto do clarão junto à linha.
+    vec3 ground = mix(uFog * 0.9, uFog * 0.35, smoothstep(0.0, 0.42, HORIZON - vUv.y));
+
+    vec3 col = mix(ground, sky, above);
+    col += (hash(vUv * uRes) - 0.5) * 0.012;
+    gl_FragColor = vec4(col, 1.0);
+  }
+`
+
 const ROAD_VERT = /* glsl */ `
   varying vec2 vUv;
   varying float vDepth;
@@ -208,9 +274,16 @@ const BODY_FRAG = /* glsl */ `
   varying vec3 vCol;
   varying float vDepth;
   void main() {
-    // A carroceria pega a cor da era, nao um cinza proprio: um carro cinza
-    // numa rua de sodio denuncia que ele nao pertence aquela luz.
-    vec3 col = vCol * uLight * 2.4;
+    // Carroceria sempre vinho, independentemente da era.
+    //
+    // Antes ela herdava a luz do capitulo e mudava de cor a cada trecho. Numa
+    // paleta em que o vinho e o fio que costura o site inteiro, carro que muda
+    // de cor le como objeto emprestado de outra cena.
+    vec3 wine = vec3(0.62, 0.09, 0.16);
+    float shade = (vCol.r + vCol.g + vCol.b) / 3.0;
+    vec3 col = wine * shade * 9.0;
+    // Um respiro da luz da era so no realce, para o carro nao ficar chapado.
+    col += uLight * shade * 1.2;
     float fog = smoothstep(24.0, 165.0, vDepth);
     gl_FragColor = vec4(mix(col, uFog, fog), 1.0);
   }
@@ -288,8 +361,10 @@ const BILL_FRAG = /* glsl */ `
     vec4 c = texture2D(uAtlas, vUv);
     if (c.a < 0.04) discard;
     // A luz da era tinge tudo o que está na estrada.
-    c.rgb = mix(c.rgb, c.rgb * uLight * 1.9, 0.34) * 1.5;
-    float fog = smoothstep(34.0, 190.0, vDepth);
+    // As fotos não se apagam com a era: elas são o assunto da margem e
+    // precisam permanecer legíveis. A luz só as tinge de leve.
+    c.rgb = mix(c.rgb, c.rgb * uLight * 1.9, 0.18) * 2.1;
+    float fog = smoothstep(60.0, 240.0, vDepth);
     gl_FragColor = vec4(mix(c.rgb, uFog, fog), c.a);
   }
 `
@@ -436,12 +511,41 @@ export async function createRoadTimeline(canvas, entries) {
   const light = new THREE.Color()
   const fog = new THREE.Color()
 
+  // --- o céu ----------------------------------------------------------------
+  // Desenhado primeiro e sem teste de profundidade: é o fundo de tudo. Antes a
+  // estrada corria contra um vazio preto, e o que dava a leitura de "noite"
+  // era a ausência de céu, não uma escolha.
+  const skyUniformsRef = {
+    uLight: null,
+    uFog: null,
+    uTime: { value: 0 },
+    uRes: { value: new THREE.Vector2(1, 1) },
+  }
+
   // --- a estrada ------------------------------------------------------------
   const roadUniforms = {
     uLight: { value: new THREE.Color(0.75, 0.72, 0.8) },
     uFog: { value: new THREE.Color(0.02, 0.008, 0.012) },
     uLen: { value: ROAD_LEN },
   }
+  skyUniformsRef.uLight = roadUniforms.uLight
+  skyUniformsRef.uFog = roadUniforms.uFog
+
+  const skyQuad = new THREE.PlaneGeometry(2, 2)
+  const sky = new THREE.Mesh(
+    skyQuad,
+    new THREE.ShaderMaterial({
+      vertexShader: SKY_VERT,
+      fragmentShader: SKY_FRAG,
+      uniforms: skyUniformsRef,
+      depthTest: false,
+      depthWrite: false,
+    })
+  )
+  sky.frustumCulled = false
+  sky.renderOrder = -1
+  scene.add(sky)
+
   const road = new THREE.Mesh(
     new THREE.PlaneGeometry(ROAD_W, ROAD_LEN, 1, 1),
     new THREE.ShaderMaterial({
@@ -651,8 +755,10 @@ export async function createRoadTimeline(canvas, entries) {
         // Maiores e mais perto do acostamento: na primeira calibragem elas
         // ficavam a 1,5 unidade de largura e o rosto era ilegível a essa
         // distância — viravam manchas na margem em vez de fotografias.
-        pos: [side * (ROAD_W / 2 + 1.1), 2.6, z + (k - 0.5) * 9],
-        size: [3.0, 4.0],
+        // Maiores, mais altas e mais perto: viradas para a estrada, elas leem
+        // como painel de rua. Antes eram pequenas demais para o rosto aparecer.
+        pos: [side * (ROAD_W / 2 + 0.6), 3.4, z + (k - 0.5) * 9],
+        size: [4.2, 5.6],
         flat: 0,
       })
     })
@@ -749,6 +855,7 @@ export async function createRoadTimeline(canvas, entries) {
     last = now
     clock += dt
     cityUniforms.uTime.value = clock
+    skyUniformsRef.uTime.value = clock
     driveCars(clock)
     render()
   }
