@@ -1,0 +1,69 @@
+.evom-interlude {
+  --evom-ruby: #c41e3a;
+  --evom-bone: #f5efe6;
+
+  position: relative;
+  width: 100%;
+  /* Preto sólido, sem gradiente: a pausa precisa cobrir por completo a emenda
+     entre os dois capítulos. Qualquer degradê deixaria o anterior vazar. */
+  background: #000;
+}
+
+.evom-interlude__stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(14px, 3vh, 30px);
+  overflow: hidden;
+  background: #000;
+}
+
+/* O único movimento contínuo da pausa. Sem ele o trecho parece travamento
+   em vez de silêncio deliberado. */
+.evom-interlude__thread {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(62vw, 720px);
+  height: 1px;
+  translate: -50% 0;
+  transform-origin: 50% 50%;
+  background: linear-gradient(90deg, transparent, rgba(196, 30, 58, 0.85), transparent);
+  box-shadow: 0 0 26px rgba(196, 30, 58, 0.5);
+  opacity: 0;
+  visibility: hidden;
+}
+
+.evom-interlude__line {
+  position: relative;
+  margin: 0;
+  max-width: 22ch;
+  text-align: center;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: clamp(1.5rem, 5.4vw, 4rem);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  color: var(--evom-bone);
+  text-wrap: balance;
+  opacity: 0;
+  visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.evom-interlude__sub {
+  position: relative;
+  margin: 0;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: var(--evom-ruby);
+  opacity: 0;
+  visibility: hidden;
+}
