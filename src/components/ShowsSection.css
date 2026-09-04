@@ -1,0 +1,127 @@
+.evom-shows {
+  --evom-ruby: #c41e3a;
+  --evom-bone: #f5efe6;
+
+  position: relative;
+  height: 320vh; /* curso de scroll da abertura do palco */
+  background: #030102;
+  color: var(--evom-bone);
+}
+
+.evom-shows__stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(24px, 6vh, 60px);
+  background: #030102; /* breu: a seção começa apagada de propósito */
+}
+
+/* Luz geral, a última a subir. */
+.evom-shows__glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  visibility: hidden;
+  background:
+    radial-gradient(ellipse at 50% 78%, rgba(196, 30, 58, 0.34) 0%, transparent 62%),
+    radial-gradient(ellipse at 50% 12%, rgba(232, 199, 126, 0.14) 0%, transparent 54%);
+}
+
+/* Feixes de refletor varrendo o palco. */
+.evom-shows__beams {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.evom-shows__beam {
+  position: absolute;
+  top: -14%;
+  left: calc(12% + var(--i) * 19%);
+  width: clamp(80px, 12vw, 190px);
+  height: 128%;
+  transform-origin: 50% 0;
+  rotate: calc(-14deg + var(--i) * 7deg);
+  opacity: 0;
+  visibility: hidden;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 246, 231, 0.24) 0%,
+    rgba(196, 30, 58, 0.12) 46%,
+    transparent 82%
+  );
+  filter: blur(16px);
+  will-change: transform, opacity;
+}
+
+.evom-shows__title {
+  position: relative;
+  z-index: 3;
+  margin: 0;
+  text-align: center;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: clamp(1.9rem, 7vw, 5.4rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  opacity: 0;
+  visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.evom-shows__title span {
+  color: var(--evom-ruby);
+}
+
+/* As fotos em três profundidades. Escala derivada de --depth: as do fundo
+   nascem menores, o que sustenta a leitura de distância. */
+.evom-shows__gallery {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(8px, 1.6vw, 26px);
+  width: min(96vw, 1500px);
+}
+
+.evom-shows__shot {
+  position: relative;
+  margin: 0;
+  flex: 0 0 auto;
+  width: calc(clamp(90px, 13vw, 210px) * (0.62 + var(--depth) * 0.5));
+  opacity: 0;
+  visibility: hidden;
+  filter: brightness(calc(0.55 + var(--depth) * 0.45));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75);
+  will-change: transform, opacity;
+}
+
+.evom-shows__shot img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background: #120609;
+}
+
+@media (max-width: 760px) {
+  .evom-shows__gallery {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .evom-shows__shot {
+    width: 27vw;
+  }
+}

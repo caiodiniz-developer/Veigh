@@ -5,6 +5,11 @@ import HistorySection from './components/HistorySection.jsx'
 import TimelineSection from './components/TimelineSection.jsx'
 import PlayerSection from './components/PlayerSection.jsx'
 import ShatterSection from './components/ShatterSection.jsx'
+import StatsSection from './components/StatsSection.jsx'
+import DiscographySection from './components/DiscographySection.jsx'
+import GallerySection from './components/GallerySection.jsx'
+import ClipsSection from './components/ClipsSection.jsx'
+import ShowsSection from './components/ShowsSection.jsx'
 
 export default function App() {
   const [introSeen, setIntroSeen] = useState(false)
@@ -35,18 +40,20 @@ export default function App() {
             (arrasto) em vez do scroll. */}
         <PlayerSection />
 
-        {/* Placeholder: os capítulos seguintes (eras, player, discografia,
-            galeria, clipes, shows, mundo, imprensa, final) entram aqui. */}
-        <section className="next-section">
-          <p className="next-section__eyebrow">Veigh</p>
-          <h2 className="next-section__title">Eu Venci o Mundo</h2>
-          <p className="next-section__note">
-            Hero do site entra aqui — placeholder.
-          </p>
-          <p className="next-section__flag">
-            introSeen: <strong>{String(introSeen)}</strong>
-          </p>
-        </section>
+        {/* Capítulo 6 — os números, um por tela. */}
+        <StatsSection />
+
+        {/* Capítulo 7 — discografia: scroll vertical vira deslocamento horizontal. */}
+        <DiscographySection />
+
+        {/* Capítulo 8 — o mural de memória, arrastável. */}
+        <GallerySection />
+
+        {/* Capítulo 9 — os clipes, em fita de película. */}
+        <ClipsSection />
+
+        {/* Capítulo 10 — o palco acendendo. */}
+        <ShowsSection />
       </main>
     </>
   )
