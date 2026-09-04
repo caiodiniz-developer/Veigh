@@ -71,7 +71,11 @@
 
 .evom-stats__item {
   position: relative;
-  min-height: 78vh;
+  /* A tela inteira por número. Com 78vh o vizinho invadia o quadro e dois
+     algarismos gigantes disputavam a mesma viewport — o oposto de
+     "monumental". */
+  min-height: 100vh;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   align-items: center;
