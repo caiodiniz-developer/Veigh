@@ -45,11 +45,39 @@ const BEATS = [
 const SLIDE_IN = 22 // yPercent de onde o beat nasce
 const SLIDE_OUT = -14 // yPercent pra onde ele sai
 
+// O MESMO conteúdo aprovado, reorganizado em campos. Nenhum fato novo entrou:
+// tudo aqui já estava na prosa anterior. O que muda é a forma — ficha, não
+// parágrafo. Não pus coordenadas nem números que eu não tivesse de origem.
 const COPY = [
-  'Itapevi, zona oeste de São Paulo. 12 de setembro de 2001.',
-  'Antes dos palcos, um emprego de telemarketing em Alphaville — e os raps gravados à noite, nos estúdios do Centro de São Paulo.',
-  'Em 2022, os prédios onde cresceu em Itapevi viraram o nome do primeiro álbum. "Dos Prédios" foi o estouro — o disco de trap nacional mais ouvido do Brasil.',
-  'Hoje: mais de 5 bilhões de streams, capa da Forbes Under 30. E um novo capítulo: Eu Venci o Mundo.',
+  {
+    tag: 'Origem',
+    fields: [
+      ['Local', 'Itapevi, zona oeste · São Paulo'],
+      ['Data', '12.09.2001'],
+    ],
+  },
+  {
+    tag: 'Antes',
+    fields: [
+      ['Emprego', 'Telemarketing, Alphaville'],
+      ['Estúdio', 'Centro de São Paulo, à noite'],
+    ],
+  },
+  {
+    tag: '2022',
+    fields: [
+      ['Álbum', 'Dos Prédios'],
+      ['Marca', 'O disco de trap nacional mais ouvido do Brasil'],
+    ],
+  },
+  {
+    tag: 'Hoje',
+    fields: [
+      ['Streams', '5 bilhões+'],
+      ['Imprensa', 'Forbes Under 30'],
+      ['Agora', 'Eu Venci o Mundo'],
+    ],
+  },
 ]
 
 export default function HistorySection({
@@ -185,7 +213,31 @@ export default function HistorySection({
 
     ScrollTrigger.refresh()
 
-    return () => ctx.revert()
+    // A degradação da imagem é dirigida por uma variável só, escrita direto no
+    // elemento. Registrada com @property no CSS — sem o registro ela seria um
+    // token sem tipo e ficaria presa no valor inicial dentro dos calc() de
+    // filter e transform, que foi exatamente o que aconteceu na mesa de luz.
+    const era = ScrollTrigger.create({
+      trigger: rootRef.current,
+      start: 'top top',
+      end: 'bottom bottom',
+      scrub: 0.6,
+      onUpdate: (self) => {
+        const root = rootRef.current
+        if (!root) return
+        root.style.setProperty('--era', self.progress.toFixed(4))
+        // O tremor de fita só existe no começo, quando a imagem ainda é
+        // memória. Classe em vez de amplitude por variável: keyframe com
+        // amplitude variável exigiria registrar mais uma propriedade só para
+        // isso, e o efeito é binário de qualquer forma.
+        root.classList.toggle('is-degraded', self.progress < 0.34)
+      },
+    })
+
+    return () => {
+      era.kill()
+      ctx.revert()
+    }
   }, [reduced, beats])
 
   return (
@@ -228,17 +280,33 @@ export default function HistorySection({
               verso da intro. */}
           {!reduced && (
             <div className="evom-history__sr-only">
-              {beats.map((text) => (
-                <p key={text}>{text}</p>
+              {beats.map((rec) => (
+                <p key={rec.tag}>
+                  {rec.tag}. {rec.fields.map(([k, v]) => `${k}: ${v}.`).join(' ')}
+                </p>
               ))}
             </div>
           )}
 
           <div className="evom-history__beats" aria-hidden={!reduced}>
-            {beats.map((text, index) => (
-              <p key={text} ref={setBeatRef(index)} className="evom-history__beat">
-                {text}
-              </p>
+            {beats.map((rec, index) => (
+              <div key={rec.tag} ref={setBeatRef(index)} className="evom-history__beat">
+                <p className="evom-history__tag">
+                  <span className="evom-history__n">
+                    {String(index + 1).padStart(2, '0')}/{String(beats.length).padStart(2, '0')}
+                  </span>
+                  {rec.tag}
+                </p>
+
+                <dl className="evom-history__fields">
+                  {rec.fields.map(([k, v]) => (
+                    <div className="evom-history__row" key={k}>
+                      <dt>{k}</dt>
+                      <dd>{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
             ))}
           </div>
         </div>

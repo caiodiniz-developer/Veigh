@@ -1,3 +1,15 @@
+/* --era percorre a seção de 0 a 1 e comanda a degradação da imagem.
+
+   Precisa ser REGISTRADA. Custom property sem tipo vira token e o valor
+   substituído dentro dos calc() de filter e transform fica preso no inicial —
+   foi exatamente o que aconteceu na mesa de luz, onde a propriedade computava
+   1 e o filtro seguia exibindo o valor de foco 0. */
+@property --era {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
 .evom-history {
   --evom-history-ink: #fff8ec;
   --evom-history-shadow: #080305;
@@ -30,23 +42,39 @@
 
 /* ------------------------------------------------------------ vídeo de fundo */
 
+/* O quadro da imagem.
+
+   No começo é pequeno: a história ainda é memória, e memória não ocupa a tela
+   inteira. Ele cresce a cada beat até sangrar na borda no último — a imagem se
+   abre junto com a carreira. scale e não inset: escalar fica no compositor,
+   mexer em inset dispararia layout a cada frame de scroll. */
 .evom-history__media {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  overflow: hidden;
+  transform: scale(calc(0.40 + var(--era) * 0.60));
+  border-radius: calc((1 - var(--era)) * 6px);
+  box-shadow:
+    0 0 0 calc((1 - var(--era)) * 1px) rgba(245, 239, 230, 0.2),
+    0 40px 120px rgba(0, 0, 0, 0.6);
+  will-change: transform;
 }
 
+/* A imagem se limpa conforme a história sobe.
+
+   Beat 1 é preto e branco, chapado e escuro — filmagem velha. A cor volta, o
+   contraste firma e o brilho sobe até o último beat, em que a imagem é o
+   arquivo cru. A degradação some junto com a pobreza da história. */
 .evom-history__video {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* Em viewport 16:9 o cover não corta nada e object-position é inerte. Ele só
-     entra em jogo no retrato, onde o corte é horizontal — ver o bloco mobile. */
-  object-position: 50% 50%;
   display: block;
-  pointer-events: none;
-  /* Sem will-change: nada aqui é animado. Anunciar transform manteria uma
-     camada de composição viva pela seção inteira, de graça. */
+  filter:
+    grayscale(calc(1 - var(--era)))
+    saturate(calc(0.4 + var(--era) * 0.85))
+    contrast(calc(1.35 - var(--era) * 0.35))
+    brightness(calc(0.72 + var(--era) * 0.34));
 }
 
 /* ------------------------------------------------------------------- scrim */
@@ -271,4 +299,93 @@
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* --------------------------------------------------- textura da fita ---- */
+
+/* Grão e linhas de varredura por cima da imagem, sumindo com o tempo. Vivem
+   dentro do quadro para escalarem junto com ele. */
+.evom-history__media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: calc((1 - var(--era)) * 0.85);
+  background-image:
+    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.22) 0px, transparent 1px, transparent 3px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='v'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23v)' opacity='0.75'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+/* Tremor de fita, só enquanto a imagem é memória. Deslocamento de dois pixels:
+   mais que isso vira defeito, menos não se percebe. */
+.evom-history.is-degraded .evom-history__media {
+  animation: evom-vhs 2.6s steps(1) infinite;
+}
+
+@keyframes evom-vhs {
+  0%, 84%   { translate: 0 0; }
+  86%       { translate: -2px 1px; }
+  88%       { translate: 1px -1px; }
+  90%, 100% { translate: 0 0; }
+}
+
+/* ------------------------------------------------------------- o dossiê */
+
+.evom-history__tag {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin: 0 0 18px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.74rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: #f5efe6;
+}
+
+.evom-history__n {
+  font-variant-numeric: tabular-nums;
+  color: #c41e3a;
+}
+
+.evom-history__fields {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+/* Rótulo e valor em colunas: é o alinhamento que faz ler como ficha em vez de
+   lista. A coluna do rótulo é fixa para os valores começarem no mesmo x. */
+.evom-history__row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 16px;
+  align-items: baseline;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(245, 239, 230, 0.12);
+}
+
+.evom-history__row dt {
+  margin: 0;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(245, 239, 230, 0.42);
+}
+
+.evom-history__row dd {
+  margin: 0;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: clamp(0.95rem, 1.5vw, 1.2rem);
+  line-height: 1.4;
+  color: rgba(245, 239, 230, 0.92);
+}
+
+@media (max-width: 640px) {
+  .evom-history__row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
 }
