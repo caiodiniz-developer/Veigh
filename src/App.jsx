@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import CursorLayer from './components/CursorLayer.jsx'
+import GrainLayer from './components/GrainLayer.jsx'
 import IntroSequence from './components/IntroSequence.jsx'
 import ManifestoSection from './components/ManifestoSection.jsx'
 import HistorySection from './components/HistorySection.jsx'
@@ -11,6 +13,8 @@ import GallerySection from './components/GallerySection.jsx'
 import ClipsSection from './components/ClipsSection.jsx'
 import ShowsSection from './components/ShowsSection.jsx'
 import WorldSection from './components/WorldSection.jsx'
+import FinaleSection from './components/FinaleSection.jsx'
+import SiteFooter from './components/SiteFooter.jsx'
 
 export default function App() {
   const [introSeen, setIntroSeen] = useState(false)
@@ -19,6 +23,9 @@ export default function App() {
     <>
       {/* A intro agora vive no fluxo do documento: é a altura dela que dá o
           curso de scroll. O site continua logo abaixo, normalmente. */}
+      <GrainLayer />
+      <CursorLayer />
+
       <IntroSequence onIntroComplete={() => setIntroSeen(true)} />
 
       <main className="site" data-intro-seen={introSeen}>
@@ -58,6 +65,10 @@ export default function App() {
 
         {/* WOW 04 — o planeta feito das fotografias do projeto. */}
         <WorldSection />
+
+        {/* Encerramento e rodape. */}
+        <FinaleSection />
+        <SiteFooter />
       </main>
     </>
   )

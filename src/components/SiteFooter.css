@@ -1,0 +1,24 @@
+.evom-footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: clamp(30px, 7vh, 70px) clamp(20px, 5vw, 92px);
+  background: #030102;
+  color: rgba(245, 239, 230, 0.4);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+.evom-footer__mark {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.5em;
+  color: rgba(245, 239, 230, 0.62);
+}
+
+.evom-footer__note {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+}
