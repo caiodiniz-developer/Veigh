@@ -93,7 +93,10 @@ const FRAG = /* glsl */ `
     sky += vec3(1.0, 0.88, 0.70) * rays * 0.20;
 
     // Bloom do sol por cima de tudo.
-    sky += vec3(1.0, 0.95, 0.86) * pow(max(0.0, 1.0 - d * 1.45), 4.0) * 0.55;
+    // Bloom contido: a 0.55 o miolo saturava em branco puro e comia as nuvens
+    // ao redor do sol. Expoente maior concentra o brilho no centro em vez de
+    // espalhá-lo pela metade da tela.
+    sky += vec3(1.0, 0.95, 0.86) * pow(max(0.0, 1.0 - d * 1.6), 5.5) * 0.34;
 
     // Dither: mata o banding, que num céu de gradiente largo é inevitável.
     sky += (hash(vUv * uRes + uTime) - 0.5) * 0.016;

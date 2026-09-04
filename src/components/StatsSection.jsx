@@ -60,7 +60,16 @@ export default function StatsSection() {
             },
             0
           )
-          .fromTo(item, { autoAlpha: 0.15, y: 60 }, { autoAlpha: 1, y: 0, ease: 'power2.out' }, 0)
+          .fromTo(item, { autoAlpha: 0, y: 60 }, { autoAlpha: 1, y: 0, ease: 'power2.out' }, 0)
+
+        // Sair também. Sem isso o número ficava aceso depois de passar, e dois
+        // algarismos gigantes dividiam a tela — cada um tem que ser dono dela.
+        gsap.to(item, {
+          autoAlpha: 0,
+          y: -60,
+          ease: 'power2.in',
+          scrollTrigger: { trigger: item, start: 'bottom 72%', end: 'bottom 18%', scrub: 0.7 },
+        })
 
         // Parallax do rótulo: entra mais devagar que o número, criando camada.
         gsap.to(item.querySelector('.evom-stats__label'), {
