@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { VIDEOS } from '../assets.js'
+import { readMotionMode, CALM } from '../motion.js'
 import './HistorySection.css'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -62,14 +63,11 @@ export default function HistorySection({
 }) {
   // Mesma escotilha da intro: ?motion=full força a versão completa em qualquer
   // máquina (no Windows, "Efeitos de animação" desligado já reporta `reduce`).
-  const [reduced] = useState(() => {
-    if (!respectReducedMotion || typeof window === 'undefined') return false
-    if (new URLSearchParams(window.location.search).get('motion') === 'full') return false
-    return (
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    )
-  })
+  // Política central: quem decide o modo é src/motion.js, não cada seção.
+  // Enquanto cada componente checava prefers-reduced-motion por conta própria,
+  // forçar o modo completo num lugar só não alcançava todos — manifesto,
+  // história e timeline continuavam colapsando na máquina do dono do site.
+  const [reduced] = useState(() => respectReducedMotion && readMotionMode() === CALM)
 
   const rootRef = useRef(null)
   const videoRef = useRef(null)

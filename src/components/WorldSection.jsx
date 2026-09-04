@@ -53,30 +53,34 @@ export default function WorldSection({ height = '420vh' }) {
     })
 
     const ctx = gsap.context(() => {
-      // Os três rótulos se revezam: um por terço do percurso.
-      stepsRef.current.filter(Boolean).forEach((el, i) => {
-        const at = i / STEPS.length
-        gsap
-          .timeline({
-            scrollTrigger: { trigger: root, start: 'top top', end: 'bottom bottom', scrub: 0.6 },
-          })
-          .fromTo(el, { autoAlpha: 0, y: 30 }, { autoAlpha: 1, y: 0, duration: 0.12 }, at)
-          .to(el, { autoAlpha: 0, y: -30, duration: 0.1 }, at + 0.22)
+      // Uma timeline só, com posições explícitas. A versão anterior criava um
+      // ScrollTrigger por rótulo mais um solto para a frase final — e a frase
+      // acabava visível desde o começo, dividindo a tela com "SÃO PAULO".
+      const tl = gsap.timeline({
+        defaults: { ease: 'none' },
+        scrollTrigger: {
+          trigger: root,
+          start: 'top top',
+          end: 'bottom bottom',
+          scrub: 0.6,
+          invalidateOnRefresh: true,
+        },
       })
 
-      gsap.fromTo(
+      // Os três rótulos se revezam no primeiro terço e meio do percurso.
+      const SEG = 0.24
+      stepsRef.current.filter(Boolean).forEach((el, i) => {
+        const at = 0.04 + i * SEG
+        tl.fromTo(el, { autoAlpha: 0, y: 30 }, { autoAlpha: 1, y: 0, duration: SEG * 0.3 }, at)
+        tl.to(el, { autoAlpha: 0, y: -30, duration: SEG * 0.28 }, at + SEG * 0.62)
+      })
+
+      // A frase final só existe depois que o último rótulo saiu.
+      tl.fromTo(
         root.querySelector('.evom-world__final'),
         { autoAlpha: 0, scale: 0.94 },
-        {
-          autoAlpha: 1,
-          scale: 1,
-          ease: 'power2.out',
-          scrollTrigger: { trigger: root, start: 'top top', end: 'bottom bottom', scrub: 0.6 },
-          immediateRender: false,
-          duration: 0.12,
-          delay: 0,
-          startAt: {},
-        }
+        { autoAlpha: 1, scale: 1, duration: 0.14, ease: 'power2.out' },
+        0.8
       )
     }, root)
 
