@@ -25,6 +25,34 @@ gsap.registerPlugin(ScrollTrigger)
 const PREVIEWS = {}
 
 const VISUAL_CYCLE = 30 // segundos que a barra leva no modo sem áudio
+const BARS = 56 // colunas da waveform
+
+/**
+ * Waveform estável por faixa, derivada do próprio título.
+ *
+ * Não há áudio no projeto, então não existe forma de onda real para analisar.
+ * Em vez de barras aleatórias (que mudariam a cada render e denunciariam a
+ * fraude) ou de todas iguais, cada faixa recebe um desenho próprio e
+ * determinístico: o mesmo título sempre gera as mesmas alturas. É decoração
+ * honesta — não afirma ser o áudio, mas dá identidade a cada faixa.
+ */
+function waveformFor(title) {
+  let h = 2166136261
+  for (let i = 0; i < title.length; i++) {
+    h ^= title.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  const out = new Array(BARS)
+  for (let i = 0; i < BARS; i++) {
+    h = Math.imul(h ^ (h >>> 15), 2246822507)
+    h = Math.imul(h ^ (h >>> 13), 3266489909)
+    const r = ((h >>> 0) % 1000) / 1000
+    // envelope: quieto nas pontas, cheio no meio — silhueta de faixa tocada
+    const env = Math.sin((i / (BARS - 1)) * Math.PI) ** 0.6
+    out[i] = 0.18 + r * 0.82 * env
+  }
+  return out
+}
 
 const fmt = (s) => {
   if (!Number.isFinite(s)) return '--:--'
@@ -54,9 +82,21 @@ export default function PlayerSection() {
   const rootRef = useRef(null)
   const trackRef = useRef(null)
   const audioRef = useRef(null)
+  const cardRef = useRef(null)
   const dragRef = useRef({ active: false, startX: 0, moved: 0 })
 
+  const wave = useMemo(() => waveformFor(TRACKLIST[index]), [index])
+
   const current = tracks[index]
+
+  // A atmosfera muda de faixa para faixa sem sair da paleta: o que varia é o
+  // ângulo e a intensidade da luz, não a cor. Trocar o matiz deixaria o site
+  // colorido, que é justamente o que a direção de arte não quer.
+  const light = {
+    '--evom-light-x': `${18 + ((index * 37) % 64)}%`,
+    '--evom-light-y': `${26 + ((index * 53) % 42)}%`,
+    '--evom-light-i': `${0.34 + ((index * 17) % 30) / 100}`,
+  }
   const total = duration ?? (current.previewSrc ? null : VISUAL_CYCLE)
 
   const go = useCallback(
@@ -176,10 +216,32 @@ export default function PlayerSection() {
     if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1) }
   }
 
+  // Tilt + specular acompanhando o cursor. Escrito direto em custom properties
+  // via style, sem estado do React: isto roda a cada movimento do mouse e um
+  // setState por evento derrubaria o frame rate.
+  const onCardMove = (e) => {
+    const card = cardRef.current
+    if (!card) return
+    const r = card.getBoundingClientRect()
+    const px = (e.clientX - r.left) / r.width
+    const py = (e.clientY - r.top) / r.height
+    card.style.setProperty('--tilt-y', `${(px - 0.5) * 11}deg`)
+    card.style.setProperty('--tilt-x', `${(0.5 - py) * 8}deg`)
+    card.style.setProperty('--gloss-x', `${px * 100}%`)
+    card.style.setProperty('--gloss-y', `${py * 100}%`)
+  }
+
+  const onCardLeave = () => {
+    const card = cardRef.current
+    if (!card) return
+    card.style.setProperty('--tilt-y', '0deg')
+    card.style.setProperty('--tilt-x', '0deg')
+  }
+
   const progress = total ? Math.min(elapsed / total, 1) : 0
 
   return (
-    <section ref={rootRef} className="evom-player" aria-label="Ouça o projeto">
+    <section ref={rootRef} className="evom-player" style={light} aria-label="Ouça o projeto">
       {/* Fundo reativo: a capa da faixa atual, ampliada e desfocada. Trocar de
           faixa faz o fundo respirar junto, sem flash. */}
       <div
@@ -228,57 +290,83 @@ export default function PlayerSection() {
         </span>
       </div>
 
-      <div className="evom-player__bar evom-player__reveal">
-        <div className="evom-player__now">
+      {/* O card de vidro: capa, meta, waveform e transporte numa peça só,
+          inclinando e refletindo a luz conforme o cursor. */}
+      <div
+        ref={cardRef}
+        className={`evom-player__card-glass evom-player__reveal${playing ? ' is-playing' : ''}`}
+        onPointerMove={onCardMove}
+        onPointerLeave={onCardLeave}
+      >
+        <div className="evom-player__gloss" aria-hidden="true" />
+
+        <div className="evom-player__art">
+          <img src={current.cover} alt="" aria-hidden="true" draggable="false" />
+          <span className="evom-player__art-sheen" aria-hidden="true" />
+        </div>
+
+        <div className="evom-player__info">
           <p className="evom-player__now-title">{current.title}</p>
           <p className="evom-player__now-meta">
             VEIGH <span aria-hidden="true">·</span> EU VENCI O MUNDO
           </p>
-        </div>
 
-        <div className="evom-player__controls">
-          <button
-            type="button"
-            className="evom-player__nav"
-            onClick={() => go(-1)}
-            disabled={index === 0}
-            aria-label="Faixa anterior"
-          >
-            ‹
-          </button>
-
-          <button
-            type="button"
-            className="evom-player__play"
-            onClick={() => setPlaying((p) => !p)}
-            aria-label={playing ? 'Pausar' : 'Tocar'}
-          >
-            {playing ? '❚❚' : '▶'}
-          </button>
-
-          <button
-            type="button"
-            className="evom-player__nav"
-            onClick={() => go(1)}
-            disabled={index === tracks.length - 1}
-            aria-label="Próxima faixa"
-          >
-            ›
-          </button>
-        </div>
-
-        <div className="evom-player__progress">
-          <span className="evom-player__time">{fmt(elapsed)}</span>
-          <div
-            className="evom-player__rail"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(progress * 100)}
-          >
-            <span className="evom-player__fill" style={{ transform: `scaleX(${progress})` }} />
+          {/* Waveform: decorativa e determinística por faixa. Só as colunas já
+              ultrapassadas pela reprodução ficam acesas. */}
+          <div className="evom-player__wave" aria-hidden="true">
+            {wave.map((amp, i) => (
+              <span
+                key={i}
+                className={`evom-player__wave-bar${i / BARS <= progress ? ' is-past' : ''}`}
+                style={{ '--amp': amp, '--i': i }}
+              />
+            ))}
           </div>
-          <span className="evom-player__time">{fmt(duration ?? NaN)}</span>
+
+          <div className="evom-player__progress">
+            <span className="evom-player__time">{fmt(elapsed)}</span>
+            <div
+              className="evom-player__rail"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(progress * 100)}
+            >
+              <span className="evom-player__fill" style={{ transform: `scaleX(${progress})` }} />
+            </div>
+            <span className="evom-player__time">{fmt(duration ?? NaN)}</span>
+          </div>
+
+          <div className="evom-player__controls">
+            <button
+              type="button"
+              className="evom-player__nav"
+              onClick={() => go(-1)}
+              disabled={index === 0}
+              aria-label="Faixa anterior"
+            >
+              ‹
+            </button>
+
+            <button
+              type="button"
+              className="evom-player__play"
+              onClick={() => setPlaying((p) => !p)}
+              aria-label={playing ? 'Pausar' : 'Tocar'}
+            >
+              {playing ? '❚❚' : '▶'}
+            </button>
+
+            <button
+              type="button"
+              className="evom-player__nav"
+              onClick={() => go(1)}
+              disabled={index === tracks.length - 1}
+              aria-label="Próxima faixa"
+            >
+              ›
+            </button>
+          </div>
         </div>
       </div>
 
