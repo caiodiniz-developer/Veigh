@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 /**
  * A linha do tempo como estrada.
@@ -146,24 +147,15 @@ const CITY_FRAG = /* glsl */ `
 const CAR_VERT = /* glsl */ `
   attribute vec3 aPos;
   attribute float aSize;
-  attribute float aSpeed;
   attribute float aSeed;
-
-  uniform float uTime;
-  uniform float uLen;
 
   varying vec2 vUv;
   varying float vDepth;
   varying float vSeed;
 
   void main() {
-    vec3 p = aPos;
-    // O carro corre no eixo Z e reentra pelo começo. mod em vez de reposicionar
-    // na CPU: o tráfego inteiro é uma conta no vertex shader.
-    float travel = uTime * aSpeed * (aSeed > 0.5 ? 1.0 : -1.0);
-    p.z = mod(p.z + travel + uLen, uLen) - uLen;
-
-    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    // A posição vem da CPU, junto com a do carro que carrega esta luz.
+    vec4 mv = modelViewMatrix * vec4(aPos, 1.0);
     mv.xy += position.xy * aSize;
     vDepth = -mv.z;
     vUv = uv;
@@ -195,6 +187,32 @@ const CAR_FRAG = /* glsl */ `
 
     a *= 1.0 - smoothstep(70.0, 240.0, vDepth);
     gl_FragColor = vec4(col * a, a);
+  }
+`
+
+const BODY_VERT = /* glsl */ `
+  varying vec3 vCol;
+  varying float vDepth;
+  void main() {
+    vCol = color;
+    vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+    vDepth = -mv.z;
+    gl_Position = projectionMatrix * mv;
+  }
+`
+
+const BODY_FRAG = /* glsl */ `
+  precision highp float;
+  uniform vec3 uLight;
+  uniform vec3 uFog;
+  varying vec3 vCol;
+  varying float vDepth;
+  void main() {
+    // A carroceria pega a cor da era, nao um cinza proprio: um carro cinza
+    // numa rua de sodio denuncia que ele nao pertence aquela luz.
+    vec3 col = vCol * uLight * 2.4;
+    float fog = smoothstep(24.0, 165.0, vDepth);
+    gl_FragColor = vec4(mix(col, uFog, fog), 1.0);
   }
 `
 
@@ -275,6 +293,64 @@ const BILL_FRAG = /* glsl */ `
     gl_FragColor = vec4(mix(c.rgb, uFog, fog), c.a);
   }
 `
+
+/**
+ * Modela um carro e devolve UMA geometria só.
+ *
+ * Carroceria, cabine, quatro rodas e a faixa de vidro são construídos
+ * separados e fundidos com mergeGeometries. Fundir é o que permite instanciar:
+ * quatorze carros viram uma draw call em vez de noventa e oito meshes.
+ *
+ * Não há luz na cena — de noite, numa estrada, o carro é silhueta. Em vez de
+ * material que reage a luz, a forma é lida por cor de vértice assada a partir
+ * da normal: face para cima recebe o céu, face lateral fica quase preta. Sai
+ * mais barato que um MeshStandardMaterial com luzes e, num contraluz, é
+ * exatamente o que o olho espera ver.
+ */
+function buildCar() {
+  const parts = []
+
+  const body = new THREE.BoxGeometry(1.85, 0.62, 4.3)
+  body.translate(0, 0.62, 0)
+  parts.push(body)
+
+  // Cabine recuada e mais estreita: é o degrau entre capô e teto que faz a
+  // silhueta ler como carro e não como caixa.
+  const cabin = new THREE.BoxGeometry(1.62, 0.56, 2.15)
+  cabin.translate(0, 1.2, -0.18)
+  parts.push(cabin)
+
+  const glass = new THREE.BoxGeometry(1.66, 0.3, 2.2)
+  glass.translate(0, 1.2, -0.18)
+  parts.push(glass)
+
+  const wheel = () => new THREE.CylinderGeometry(0.34, 0.34, 0.26, 10)
+  for (const [x, z] of [[-0.86, 1.32], [0.86, 1.32], [-0.86, -1.36], [0.86, -1.36]]) {
+    const w = wheel()
+    w.rotateZ(Math.PI / 2)
+    w.translate(x, 0.34, z)
+    parts.push(w)
+  }
+
+  const car = mergeGeometries(parts, false)
+
+  // Cor por vértice a partir da normal: topo claro, lateral escura.
+  const normal = car.attributes.normal
+  const colors = new Float32Array(normal.count * 3)
+  for (let i = 0; i < normal.count; i++) {
+    const up = Math.max(0, normal.getY(i))
+    const side = Math.abs(normal.getX(i))
+    // Escurissimo de proposito. Na primeira tentativa isto valia ate 0.4 e,
+    // convertido para sRGB na saida, os carros saiam cinza-claro contra uma
+    // rua noturna — pareciam recortados e colados na cena.
+    const v = 0.012 + up * 0.055 + side * 0.008
+    colors[i * 3] = v
+    colors[i * 3 + 1] = v * 0.94
+    colors[i * 3 + 2] = v * 0.98
+  }
+  car.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  return car
+}
 
 /** Desenha anos e fotos num atlas só: uma textura, uma draw call. */
 async function buildAtlas(years, photos) {
@@ -467,57 +543,98 @@ export async function createRoadTimeline(canvas, entries) {
   scene.add(glows)
 
   // --- tráfego --------------------------------------------------------------
-  // Pares de luz correndo nas duas mãos. Não há carroceria: à noite, numa
-  // estrada, o que se vê é a luz. Modelar o carro custaria geometria e não
-  // acrescentaria nada que a velocidade e a cor já não digam.
-  const CARS = 26
-  const carGeo = new THREE.InstancedBufferGeometry()
-  const carQuad = new THREE.PlaneGeometry(1, 1)
-  carGeo.index = carQuad.index
-  carGeo.attributes.position = carQuad.attributes.position
-  carGeo.attributes.uv = carQuad.attributes.uv
-  carGeo.instanceCount = CARS
+  // Carros modelados de verdade, instanciados numa malha só. As luzes
+  // continuam sendo billboards aditivos por cima: geometria não brilha, e o
+  // halo é o que faz o farol existir a distância.
+  const CARS = 14
+  const carGeo = buildCar()
+  const carMesh = new THREE.InstancedMesh(
+    carGeo,
+    new THREE.ShaderMaterial({
+      vertexShader: BODY_VERT,
+      fragmentShader: BODY_FRAG,
+      uniforms: { uLight: roadUniforms.uLight, uFog: roadUniforms.uFog },
+      vertexColors: true,
+    }),
+    CARS
+  )
+  carMesh.frustumCulled = false
+  scene.add(carMesh)
 
-  const carPos = new Float32Array(CARS * 3)
-  const carSize = new Float32Array(CARS)
-  const carSpeed = new Float32Array(CARS)
-  const carSeed = new Float32Array(CARS)
-
+  const lanes = []
   for (let i = 0; i < CARS; i++) {
-    const pair = Math.floor(i / 2)
-    const oncoming = pair % 2 === 0
-    // Faróis andam aos pares, separados pela bitola do carro.
-    const side = i % 2 ? 1 : -1
-    carPos[i * 3] = (oncoming ? -1 : 1) * (ROAD_W * 0.24) + side * 0.62
-    carPos[i * 3 + 1] = 0.72
-    carPos[i * 3 + 2] = -(pair / (CARS / 2)) * ROAD_LEN
-    // Calibrado no olho contra o screenshot: a 0.85 o farol virava um ponto
-    // de um pixel a meia distância e desaparecia contra as janelas da cidade.
-    carSize[i] = oncoming ? 1.7 : 1.15
-    carSpeed[i] = 9 + Math.random() * 14
-    carSeed[i] = oncoming ? 0.9 : 0.1
+    const oncoming = i % 2 === 0
+    lanes.push({
+      x: (oncoming ? -1 : 1) * ROAD_W * 0.24,
+      z: -(i / CARS) * ROAD_LEN,
+      speed: (9 + Math.random() * 15) * (oncoming ? 1 : -1),
+      oncoming,
+    })
   }
 
-  carGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(carPos, 3))
-  carGeo.setAttribute('aSize', new THREE.InstancedBufferAttribute(carSize, 1))
-  carGeo.setAttribute('aSpeed', new THREE.InstancedBufferAttribute(carSpeed, 1))
-  carGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(carSeed, 1))
+  // Luzes: duas por carro, na frente ou atrás conforme o sentido.
+  const LAMPS = CARS * 2
+  const carLightGeo = new THREE.InstancedBufferGeometry()
+  const carQuad = new THREE.PlaneGeometry(1, 1)
+  carLightGeo.index = carQuad.index
+  carLightGeo.attributes.position = carQuad.attributes.position
+  carLightGeo.attributes.uv = carQuad.attributes.uv
+  carLightGeo.instanceCount = LAMPS
 
-  const carUniforms = { uTime: { value: 0 }, uLen: { value: ROAD_LEN } }
-  const cars = new THREE.Mesh(
-    carGeo,
+  const lPos = new Float32Array(LAMPS * 3)
+  const lSize = new Float32Array(LAMPS)
+  const lSeed = new Float32Array(LAMPS)
+  for (let i = 0; i < LAMPS; i++) {
+    lSize[i] = lanes[Math.floor(i / 2)].oncoming ? 1.7 : 1.15
+    lSeed[i] = lanes[Math.floor(i / 2)].oncoming ? 0.9 : 0.1
+  }
+  carLightGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(lPos, 3))
+  carLightGeo.setAttribute('aSize', new THREE.InstancedBufferAttribute(lSize, 1))
+  carLightGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(lSeed, 1))
+
+  const carLights = new THREE.Mesh(
+    carLightGeo,
     new THREE.ShaderMaterial({
       vertexShader: CAR_VERT,
       fragmentShader: CAR_FRAG,
-      uniforms: carUniforms,
+      uniforms: {},
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     })
   )
-  cars.frustumCulled = false
-  cars.renderOrder = 3
-  scene.add(cars)
+  carLights.frustumCulled = false
+  carLights.renderOrder = 3
+  scene.add(carLights)
+
+  const dummy = new THREE.Object3D()
+  const posAttr = carLightGeo.getAttribute('aPos')
+
+  // Move o trânsito. Quatorze matrizes por frame é barato, e ter as posições
+  // na CPU é o que permite pendurar as luzes exatamente no bico de cada carro.
+  const driveCars = (t) => {
+    for (let i = 0; i < CARS; i++) {
+      const lane = lanes[i]
+      let z = lane.z + t * lane.speed
+      z = ((z % ROAD_LEN) + ROAD_LEN) % ROAD_LEN - ROAD_LEN
+      dummy.position.set(lane.x, 0, z)
+      // A frente do modelo aponta para +Z. Quem vem na direcao da camera anda
+      // para +Z e nao gira; quem se afasta e que precisa da meia volta.
+      dummy.rotation.y = lane.oncoming ? 0 : Math.PI
+      dummy.updateMatrix()
+      carMesh.setMatrixAt(i, dummy.matrix)
+
+      const nose = lane.oncoming ? z + 2.0 : z - 2.0
+      for (let k = 0; k < 2; k++) {
+        const j = i * 2 + k
+        posAttr.array[j * 3] = lane.x + (k ? 0.62 : -0.62)
+        posAttr.array[j * 3 + 1] = 0.72
+        posAttr.array[j * 3 + 2] = nose
+      }
+    }
+    carMesh.instanceMatrix.needsUpdate = true
+    posAttr.needsUpdate = true
+  }
 
   // --- anos e fotos ---------------------------------------------------------
   const marks = []
@@ -631,8 +748,8 @@ export async function createRoadTimeline(canvas, entries) {
     const dt = Math.min((now - last) / 1000, 0.05)
     last = now
     clock += dt
-    carUniforms.uTime.value = clock
     cityUniforms.uTime.value = clock
+    driveCars(clock)
     render()
   }
 
@@ -694,7 +811,9 @@ export async function createRoadTimeline(canvas, entries) {
       window.removeEventListener('resize', resize)
       carQuad.dispose()
       carGeo.dispose()
-      cars.material.dispose()
+      carLightGeo.dispose()
+      carMesh.material.dispose()
+      carLights.material.dispose()
       quad.dispose()
       box.dispose()
       glowQuad.dispose()

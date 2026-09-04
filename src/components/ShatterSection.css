@@ -48,6 +48,15 @@
   color: #f5efe6;
 }
 
+/* Cortina do fim: sobe por cima da cena com a frase ainda montada atrás. */
+.evom-shatter__fade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* A frase existe no DOM para leitor de tela e para busca — o canvas é imagem. */
 .evom-shatter__sr {
   position: absolute;
