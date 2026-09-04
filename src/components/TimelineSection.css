@@ -37,7 +37,10 @@
   font-size: 0.72rem;
   letter-spacing: 0.4em;
   text-transform: uppercase;
-  color: rgba(245, 239, 230, 0.45);
+  color: rgba(245, 239, 230, 0.62);
+  /* A cidade acendeu atrás deste rótulo e ele sumia contra as janelas.
+     A sombra devolve o contraste sem precisar de caixa ou fundo sólido. */
+  text-shadow: 0 0 22px rgba(3, 2, 6, 0.95), 0 2px 12px rgba(3, 2, 6, 0.9);
 }
 
 /* As legendas ocupam o mesmo lugar, uma de cada vez, na faixa inferior —

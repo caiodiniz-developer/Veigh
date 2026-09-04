@@ -67,6 +67,98 @@ const ROAD_FRAG = /* glsl */ `
   }
 `
 
+
+const CITY_VERT = /* glsl */ `
+  attribute vec3 aPos;
+  attribute vec3 aScale;
+  attribute float aSeed;
+
+  varying vec3 vLocal;
+  varying vec3 vNormal;
+  varying float vSeed;
+  varying float vDepth;
+
+  void main() {
+    vec3 scaled = position * aScale;
+    // O prédio nasce do chão: a caixa é deslocada meia altura para cima,
+    // senão metade dela ficaria enterrada no asfalto.
+    vec3 world = aPos + scaled + vec3(0.0, aScale.y * 0.5, 0.0);
+    vec4 mv = modelViewMatrix * vec4(world, 1.0);
+    vDepth = -mv.z;
+    vLocal = scaled;
+    vNormal = normal;
+    vSeed = aSeed;
+    gl_Position = projectionMatrix * mv;
+  }
+`
+
+const CITY_FRAG = /* glsl */ `
+  precision highp float;
+  uniform vec3 uLight;
+  uniform vec3 uFog;
+  varying vec3 vLocal;
+  varying vec3 vNormal;
+  varying float vSeed;
+  varying float vDepth;
+
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+
+  void main() {
+    // Fachada quase preta: a cidade é silhueta, não cenário detalhado.
+    vec3 col = vec3(0.028, 0.020, 0.026);
+
+    // Janelas acesas. A grade é calculada no espaço do próprio prédio, então
+    // todas as janelas têm o mesmo tamanho independentemente de o prédio ser
+    // alto ou largo — que é o que faz a escala urbana ficar crível.
+    if (abs(vNormal.y) < 0.5) {
+      vec2 face = abs(vNormal.x) > 0.5 ? vec2(vLocal.z, vLocal.y) : vec2(vLocal.x, vLocal.y);
+      vec2 cell = floor(face / vec2(0.42, 0.62));
+      float lit = step(0.66, hash(cell + vSeed * 37.0));
+      // Nem toda janela acesa tem o mesmo brilho: prédio com brilho uniforme
+      // lê como textura, não como janelas.
+      float strength = 0.35 + hash(cell + vSeed * 91.0) * 0.65;
+      vec2 inCell = fract(face / vec2(0.42, 0.62));
+      float pane = step(0.12, inCell.x) * step(inCell.x, 0.88)
+                 * step(0.16, inCell.y) * step(inCell.y, 0.84);
+      col += uLight * lit * pane * strength * 1.5;
+    }
+
+    float fog = smoothstep(26.0, 175.0, vDepth);
+    gl_FragColor = vec4(mix(col, uFog, fog), 1.0);
+  }
+`
+
+const GLOW_VERT = /* glsl */ `
+  attribute vec3 aPos;
+  attribute float aSize;
+  varying vec2 vUv;
+  varying float vDepth;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(aPos, 1.0);
+    mv.xy += position.xy * aSize;
+    vDepth = -mv.z;
+    vUv = uv;
+    gl_Position = projectionMatrix * mv;
+  }
+`
+
+const GLOW_FRAG = /* glsl */ `
+  precision highp float;
+  uniform vec3 uLight;
+  varying vec2 vUv;
+  varying float vDepth;
+  void main() {
+    float d = length(vUv - 0.5) * 2.0;
+    float a = pow(max(0.0, 1.0 - d), 2.6);
+    // Some com a distância junto com o resto: um poste brilhando no fim da
+    // névoa entregaria que a névoa é falsa.
+    a *= 1.0 - smoothstep(30.0, 170.0, vDepth);
+    gl_FragColor = vec4(uLight * a, a);
+  }
+`
+
 const BILL_VERT = /* glsl */ `
   attribute vec3 aPos;
   attribute vec2 aCell;
@@ -218,6 +310,94 @@ export async function createRoadTimeline(canvas, entries) {
   road.position.z = -ROAD_LEN / 2
   scene.add(road)
 
+  // --- a cidade -------------------------------------------------------------
+  // Silhueta urbana dos dois lados, recuando até a névoa. São caixas
+  // instanciadas com janelas desenhadas no shader — nenhuma geometria extra
+  // por janela, o que permite quase duzentos prédios numa draw call só.
+  const CITY = 190
+  const cityGeo = new THREE.InstancedBufferGeometry()
+  const box = new THREE.BoxGeometry(1, 1, 1)
+  cityGeo.index = box.index
+  cityGeo.attributes.position = box.attributes.position
+  cityGeo.attributes.normal = box.attributes.normal
+  cityGeo.attributes.uv = box.attributes.uv
+  cityGeo.instanceCount = CITY
+
+  const cPos = new Float32Array(CITY * 3)
+  const cScale = new Float32Array(CITY * 3)
+  const cSeed = new Float32Array(CITY)
+
+  for (let i = 0; i < CITY; i++) {
+    const side = i % 2 ? 1 : -1
+    // Duas fileiras por lado: a de trás mais alta e mais longe, o que dá
+    // profundidade sem precisar de mais geometria.
+    const row = Math.floor(i / 2) % 2
+    const dist = ROAD_W / 2 + 7 + row * 13 + Math.random() * 5
+    const h = (row ? 14 : 7) + Math.random() * (row ? 26 : 14)
+
+    cPos[i * 3] = side * dist
+    cPos[i * 3 + 1] = 0
+    cPos[i * 3 + 2] = -8 - (i / CITY) * (ROAD_LEN - 30) + (Math.random() - 0.5) * 12
+
+    cScale[i * 3] = 3.5 + Math.random() * 5
+    cScale[i * 3 + 1] = h
+    cScale[i * 3 + 2] = 3.5 + Math.random() * 6
+    cSeed[i] = Math.random() * 100
+  }
+
+  cityGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(cPos, 3))
+  cityGeo.setAttribute('aScale', new THREE.InstancedBufferAttribute(cScale, 3))
+  cityGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(cSeed, 1))
+
+  const city = new THREE.Mesh(
+    cityGeo,
+    new THREE.ShaderMaterial({
+      vertexShader: CITY_VERT,
+      fragmentShader: CITY_FRAG,
+      uniforms: { uLight: roadUniforms.uLight, uFog: roadUniforms.uFog },
+    })
+  )
+  city.frustumCulled = false
+  scene.add(city)
+
+  // --- postes ---------------------------------------------------------------
+  // Só o halo, sem o mastro: a luz é o que se vê à noite, e billboards
+  // aditivos custam muito menos que cilindros com material emissivo.
+  const POLES = 46
+  const glowGeo = new THREE.InstancedBufferGeometry()
+  const glowQuad = new THREE.PlaneGeometry(1, 1)
+  glowGeo.index = glowQuad.index
+  glowGeo.attributes.position = glowQuad.attributes.position
+  glowGeo.attributes.uv = glowQuad.attributes.uv
+  glowGeo.instanceCount = POLES
+
+  const gPos = new Float32Array(POLES * 3)
+  const gSize = new Float32Array(POLES)
+  for (let i = 0; i < POLES; i++) {
+    const side = i % 2 ? 1 : -1
+    gPos[i * 3] = side * (ROAD_W / 2 + 1.4)
+    gPos[i * 3 + 1] = 5.2
+    gPos[i * 3 + 2] = -10 - Math.floor(i / 2) * 17
+    gSize[i] = 5 + Math.random() * 2.5
+  }
+  glowGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(gPos, 3))
+  glowGeo.setAttribute('aSize', new THREE.InstancedBufferAttribute(gSize, 1))
+
+  const glows = new THREE.Mesh(
+    glowGeo,
+    new THREE.ShaderMaterial({
+      vertexShader: GLOW_VERT,
+      fragmentShader: GLOW_FRAG,
+      uniforms: { uLight: roadUniforms.uLight },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+  )
+  glows.frustumCulled = false
+  glows.renderOrder = 2
+  scene.add(glows)
+
   // --- anos e fotos ---------------------------------------------------------
   const marks = []
   entries.forEach((e, i) => {
@@ -361,6 +541,12 @@ export async function createRoadTimeline(canvas, entries) {
     dispose() {
       window.removeEventListener('resize', resize)
       quad.dispose()
+      box.dispose()
+      glowQuad.dispose()
+      cityGeo.dispose()
+      city.material.dispose()
+      glowGeo.dispose()
+      glows.material.dispose()
       geometry.dispose()
       road.geometry.dispose()
       road.material.dispose()
