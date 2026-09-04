@@ -1,267 +1,116 @@
 .evom-tl {
-  --evom-wine: #6e1423;
-  --evom-wine-deep: #3d0b16;
-  --evom-ruby: #c41e3a;
-  --evom-ink: #0a0305;
+  /* Cor da era corrente. A cena WebGL escreve aqui a cada frame de scroll, e o
+     HTML por cima usa a mesma variável — asfalto e tipografia iluminados pela
+     mesma luz, em vez de duas paletas correndo em paralelo. */
+  --evom-era-light: #7d8fa8;
   --evom-bone: #f5efe6;
-  --evom-rail-x: clamp(22px, 6vw, 96px);
 
   position: relative;
-  padding: 18vh 0 22vh;
-  background:
-    linear-gradient(180deg, var(--evom-ink) 0%, #150509 42%, var(--evom-ink) 100%);
+  width: 100%;
+  background: #05070c;
   color: var(--evom-bone);
-  overflow: clip; /* segura as fotos tortas sem criar scroll horizontal */
 }
 
-/* Emenda com o capítulo anterior: o topo nasce transparente para o preto do
-   manifesto atravessar, em vez de "acabou uma div, começou outra". */
-.evom-tl::before {
-  content: '';
+.evom-tl__stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+}
+
+.evom-tl__canvas {
   position: absolute;
-  inset: 0 0 auto 0;
-  height: 22vh;
-  background: linear-gradient(180deg, var(--evom-ink) 0%, transparent 100%);
-  pointer-events: none;
-}
-
-.evom-tl__head {
-  position: relative;
-  z-index: 2;
-  padding-left: calc(var(--evom-rail-x) + clamp(20px, 5vw, 68px));
-  padding-right: 5vw;
-  margin-bottom: clamp(60px, 12vh, 140px);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .evom-tl__eyebrow {
-  margin: 0 0 14px;
+  position: absolute;
+  z-index: 2;
+  top: clamp(20px, 5vh, 54px);
+  left: clamp(20px, 5vw, 72px);
+  margin: 0;
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: 0.78rem;
-  letter-spacing: 0.34em;
+  font-size: 0.72rem;
+  letter-spacing: 0.4em;
   text-transform: uppercase;
-  color: rgba(245, 239, 230, 0.42);
+  color: rgba(245, 239, 230, 0.45);
 }
 
-.evom-tl__title {
-  margin: 0;
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-weight: 500;
-  font-size: clamp(2.2rem, 8vw, 6rem);
-  line-height: 0.98;
-  letter-spacing: -0.03em;
-}
-
-/* ------------------------------------------------------------- o trilho */
-
-.evom-tl__rail {
+/* As legendas ocupam o mesmo lugar, uma de cada vez, na faixa inferior —
+   longe do centro, onde a estrada some no horizonte. */
+.evom-tl__cards {
   position: absolute;
-  left: var(--evom-rail-x);
-  top: 18vh;
-  bottom: 22vh;
-  width: 1px;
-  background: rgba(245, 239, 230, 0.14);
-}
-
-/* O preenchimento cresce por scaleY a partir do topo — transform, nunca height,
-   que dispararia layout a cada frame do scroll. */
-.evom-tl__rail-fill {
-  position: absolute;
-  inset: 0;
-  transform-origin: 50% 0;
-  transform: scaleY(0);
-  background: linear-gradient(180deg, var(--evom-ruby) 0%, var(--evom-wine) 70%, transparent 100%);
-  box-shadow: 0 0 18px rgba(196, 30, 58, 0.55);
-  will-change: transform;
-}
-
-/* ------------------------------------------------------------ as entradas */
-
-.evom-tl__list {
-  position: relative;
-  z-index: 1;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: clamp(90px, 18vh, 220px);
-}
-
-.evom-tl__entry {
-  position: relative;
+  z-index: 2;
+  left: clamp(20px, 6vw, 96px);
+  right: clamp(20px, 6vw, 96px);
+  bottom: clamp(8vh, 14vh, 18vh);
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(0, 1.05fr);
-  align-items: start;
-  gap: clamp(24px, 5vw, 80px);
-  padding-left: calc(var(--evom-rail-x) + clamp(20px, 5vw, 68px));
-  padding-right: 5vw;
+  pointer-events: none;
 }
 
-.evom-tl__marker {
-  position: absolute;
-  left: var(--evom-rail-x);
-  top: 0.62em;
-  width: 11px;
-  height: 11px;
-  margin-left: -5px;
-  border-radius: 50%;
-  background: var(--evom-ruby);
-  box-shadow: 0 0 0 4px rgba(196, 30, 58, 0.16), 0 0 22px rgba(196, 30, 58, 0.7);
+.evom-tl__card {
+  grid-area: 1 / 1;
+  max-width: 44ch;
   opacity: 0;
   visibility: hidden;
   will-change: transform, opacity;
 }
 
 .evom-tl__year {
-  margin: 0 0 10px;
+  margin: 0 0 6px;
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-weight: 500;
-  font-size: clamp(2.6rem, 7vw, 5.4rem);
-  line-height: 0.92;
+  font-size: clamp(2rem, 5.4vw, 4rem);
+  line-height: 0.94;
   letter-spacing: -0.04em;
-  color: var(--evom-bone);
-  opacity: 0;
-  visibility: hidden;
-  will-change: transform, opacity;
-}
-
-.evom-tl__copy {
-  opacity: 0;
-  visibility: hidden;
-  will-change: transform, opacity;
+  color: var(--evom-era-light);
+  text-shadow: 0 0 40px rgba(5, 7, 12, 0.9);
+  transition: color 400ms ease;
 }
 
 .evom-tl__name {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-weight: 500;
-  font-size: clamp(0.92rem, 1.5vw, 1.12rem);
-  letter-spacing: 0.2em;
+  font-size: clamp(0.86rem, 1.4vw, 1.05rem);
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--evom-ruby);
+  color: var(--evom-bone);
 }
 
 .evom-tl__desc {
   margin: 0;
-  max-width: 42ch;
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: clamp(0.95rem, 1.35vw, 1.12rem);
+  font-size: clamp(0.9rem, 1.25vw, 1.05rem);
   line-height: 1.55;
   color: rgba(245, 239, 230, 0.72);
+  text-shadow: 0 2px 20px rgba(5, 7, 12, 0.9);
 }
 
-/* --------------------------------------------------------- as fotografias */
+/* ------------------------------------------------------------- fallback */
 
-/* Arranjo espalhado em vez de fila: as fotos se sobrepõem de leve e sentam em
-   alturas diferentes, como fotografias jogadas sobre uma mesa. É o que tira a
-   leitura de "galeria de componentes" e deixa a de memória. */
-.evom-tl__media {
+/* Só aparece quando não há cena: movimento reduzido ou WebGL indisponível. */
+.evom-tl__fallback {
+  display: none;
+}
+
+.evom-tl.is-static .evom-tl__stage {
+  display: none;
+}
+
+.evom-tl.is-static .evom-tl__fallback {
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: 0;
-  padding-top: clamp(6px, 2vh, 26px);
-}
-
-.evom-tl__media > * + * {
-  margin-left: clamp(-42px, -3vw, -18px);
-}
-
-.evom-tl__shot:nth-child(2) {
-  margin-top: clamp(28px, 7vh, 74px);
-  z-index: 2;
-}
-
-.evom-tl__shot:nth-child(3) {
-  margin-top: clamp(8px, 2vh, 22px);
-  z-index: 1;
-}
-
-/* Fotografia solta, não card: moldura clara, base mais alta e uma legenda
-   pequena — a leitura é de foto revelada, não de componente de UI. */
-.evom-tl__shot {
-  position: relative;
+  flex-direction: column;
+  gap: clamp(34px, 7vh, 80px);
   margin: 0;
-  padding: 10px 10px 34px;
-  width: clamp(140px, 19vw, 268px);
-  background: #ece6dc;
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.6);
-  opacity: 0;
-  visibility: hidden;
-  will-change: transform, opacity;
+  padding: 14vh clamp(20px, 6vw, 96px);
+  list-style: none;
 }
 
-.evom-tl__shot img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
-  background: #1a0a0e;
-}
-
-/* A capa é quadrada e tem só 447px de lado no arquivo: fica menor que as fotos
-   de propósito, para nunca ser ampliada além do que aguenta. */
-.evom-tl__shot--cover img {
-  aspect-ratio: 1 / 1;
-}
-
-.evom-tl__shot figcaption {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 11px;
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: 0.62rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(20, 6, 10, 0.62);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* --------------------------------------------------------------- mobile */
-
-@media (max-width: 860px) {
-  .evom-tl__entry {
-    grid-template-columns: 1fr;
-    gap: clamp(20px, 4vh, 38px);
-  }
-
-  /* Sem parallax pesado e com as fotos rolando lado a lado por toque, em vez de
-     empilhar e alongar a seção. */
-  .evom-tl__media {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 6px;
-    scrollbar-width: none;
-  }
-
-  .evom-tl__media::-webkit-scrollbar {
-    display: none;
-  }
-
-  .evom-tl__shot {
-    flex: 0 0 auto;
-    width: 46vw;
-    scroll-snap-align: start;
-  }
-}
-
-/* ------------------------------------------------- prefers-reduced-motion */
-
-/* Tudo visível e reto: a linha do tempo continua legível como documento. */
-.evom-tl.is-static .evom-tl__marker,
-.evom-tl.is-static .evom-tl__year,
-.evom-tl.is-static .evom-tl__copy,
-.evom-tl.is-static .evom-tl__shot {
-  opacity: 1;
-  visibility: visible;
-  transform: none;
-}
-
-.evom-tl.is-static .evom-tl__rail-fill {
-  transform: scaleY(1);
+.evom-tl.is-static .evom-tl__year {
+  color: #c41e3a;
 }

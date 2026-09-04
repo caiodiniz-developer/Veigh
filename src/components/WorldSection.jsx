@@ -66,6 +66,7 @@ export default function WorldSection({ height = '420vh' }) {
           invalidateOnRefresh: true,
         },
       })
+      tl.to({}, { duration: 1 }, 0) // espaçador: sem ele a duração seria 0.94 e as posições escorregariam
 
       // Os três rótulos se revezam no primeiro terço e meio do percurso.
       const SEG = 0.24
