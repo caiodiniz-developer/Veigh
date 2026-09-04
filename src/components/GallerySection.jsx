@@ -101,15 +101,7 @@ export default function GallerySection() {
         // 1 no centro da lupa, 0 fora do alcance. A curva quadrática mantém a
         // borda do foco suave — linear cria um anel duro visível.
         const focus = Math.max(0, 1 - d / LOUPE) ** 2
-        const before = Number(shot.dataset.focus || 0)
         shot.style.setProperty('--focus', focus.toFixed(3))
-        shot.dataset.focus = focus
-        // Avisa a trilha ao ENTRAR no foco, não a cada frame dentro dele.
-        // Evento em vez de import direto: a galeria não precisa saber que
-        // existe uma trilha, e a trilha não precisa conhecer a galeria.
-        if (before < 0.55 && focus >= 0.55) {
-          window.dispatchEvent(new CustomEvent('evom:slide'))
-        }
       }
     }
 
