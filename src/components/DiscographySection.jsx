@@ -7,15 +7,19 @@ import './DiscographySection.css'
 gsap.registerPlugin(ScrollTrigger)
 
 /**
- * Discografia horizontal.
+ * Discografia — a caixa de disco.
  *
- * O usuário continua rolando para baixo, mas o que se move é o eixo X: a
- * seção fica presa e a fita de discos anda lateralmente. Mecânica nova de
- * novo — nenhum outro capítulo converte scroll vertical em deslocamento
- * horizontal.
+ * Antes era scroll horizontal com as capas de pé, uma ao lado da outra. Agora
+ * é uma caixa de loja: as capas empilhadas inclinadas para trás, e o scroll
+ * FOLHEIA uma de cada vez para a frente — o gesto de garimpar vinil.
  *
- * Cada disco é uma capa saindo de uma "manga": a arte desliza para fora do
- * sulco quando chega ao centro, que é o gesto de tirar um vinil da capa.
+ * O gesto é o ponto. Ninguém folheia discos deslizando de lado; folheia
+ * puxando a capa da frente e deixando cair. Ao reproduzir isso, a seção passa
+ * a falar a língua do assunto em vez de usar o carrossel genérico.
+ *
+ * Tudo em CSS 3D: as capas existem num espaço com perspectiva e o que muda por
+ * disco é rotação em X, deslocamento em Z e altura. Nada de WebGL — a cena tem
+ * quatro objetos, e três transformações resolvem.
  */
 const DISCS = [
   {
@@ -44,56 +48,76 @@ const DISCS = [
   },
 ]
 
-export default function DiscographySection() {
+export default function DiscographySection({ height = '420vh' }) {
   const rootRef = useRef(null)
-  const tapeRef = useRef(null)
+  const cardsRef = useRef([])
+  const metaRef = useRef([])
 
   useEffect(() => {
     const root = rootRef.current
-    const tape = tapeRef.current
-    if (!root || !tape) return
+    if (!root) return
 
     const ctx = gsap.context(() => {
-      // A distância a percorrer depende da largura real da fita, então é
-      // calculada por função e reavaliada no refresh — em vez de um valor fixo
-      // que quebraria em qualquer largura diferente da de desenvolvimento.
-      const distance = () => Math.max(0, tape.scrollWidth - window.innerWidth * 0.92)
-
-      gsap.to(tape, {
-        x: () => -distance(),
-        ease: 'none',
+      const tl = gsap.timeline({
+        defaults: { ease: 'none' },
         scrollTrigger: {
           trigger: root,
           start: 'top top',
-          end: () => '+=' + distance(),
-          scrub: 0.7,
-          pin: true,
-          anticipatePin: 1,
+          end: 'bottom bottom',
+          scrub: 0.65,
           invalidateOnRefresh: true,
         },
       })
+      // Espaçador travando a duração em 1: posição na timeline vira progresso
+      // de scroll. Sem ele a duração vem do conteúdo e tudo escorrega.
+      tl.to({}, { duration: 1 }, 0)
 
-      // Cada disco reage ao próprio momento de centralidade. containerAnimation
-      // é o que permite um ScrollTrigger enxergar um elemento que se move na
-      // horizontal por causa de outro ScrollTrigger.
-      const horizontal = ScrollTrigger.getById?.('evom-disc') || null
-      void horizontal
+      const seg = 1 / DISCS.length
 
-      tape.querySelectorAll('.evom-disc__item').forEach((item) => {
-        const art = item.querySelector('.evom-disc__art')
-        const meta = item.querySelector('.evom-disc__meta')
-        gsap
-          .timeline({
-            scrollTrigger: {
-              trigger: item,
-              containerAnimation: gsap.getTweensOf(tape)[0],
-              start: 'left 78%',
-              end: 'right 30%',
-              scrub: 0.6,
-            },
-          })
-          .fromTo(art, { scale: 0.86, rotate: -2.5 }, { scale: 1, rotate: 0, ease: 'power1.out' }, 0)
-          .fromTo(meta, { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, ease: 'power2.out' }, 0.1)
+      cardsRef.current.filter(Boolean).forEach((card, i) => {
+        const at = i * seg
+
+        // Estado inicial: recostado na caixa, atrás dos que vieram antes.
+        gsap.set(card, {
+          // -52 e não -68: a 68 graus a capa fica quase de perfil e vira uma
+          // tira fina, sem arte visível. Disco recostado numa caixa mostra a
+          // capa, é para isso que ele está inclinado e não deitado.
+          rotateX: -52,
+          y: -i * 8,
+          z: -i * 66,
+          scale: 1 - i * 0.03,
+          autoAlpha: i === 0 ? 1 : 0.55,
+        })
+
+        // Levanta: a capa vem para a vertical e para a frente da caixa.
+        tl.to(
+          card,
+          { rotateX: 0, z: 0, y: 0, scale: 1, autoAlpha: 1, duration: seg * 0.5, ease: 'power2.out' },
+          at
+        )
+
+        // E cai para a frente, saindo do caminho da próxima — o disco folheado
+        // não some, ele tomba na sua direção e passa por baixo do quadro.
+        if (i < DISCS.length - 1) {
+          tl.to(
+            card,
+            { rotateX: 82, y: 220, z: 340, autoAlpha: 0, duration: seg * 0.42, ease: 'power2.in' },
+            at + seg * 0.58
+          )
+        }
+      })
+
+      metaRef.current.filter(Boolean).forEach((meta, i) => {
+        const at = i * seg
+        tl.fromTo(
+          meta,
+          { autoAlpha: 0, y: 26 },
+          { autoAlpha: 1, y: 0, duration: seg * 0.3, ease: 'power2.out' },
+          at + seg * 0.16
+        )
+        if (i < DISCS.length - 1) {
+          tl.to(meta, { autoAlpha: 0, y: -26, duration: seg * 0.24, ease: 'power2.in' }, at + seg * 0.66)
+        }
       })
     }, root)
 
@@ -101,29 +125,44 @@ export default function DiscographySection() {
   }, [])
 
   return (
-    <section ref={rootRef} className="evom-disc" aria-label="Discografia">
+    <section ref={rootRef} className="evom-disc" style={{ height }} aria-label="Discografia">
       <div className="evom-disc__stage">
-        <header className="evom-disc__head">
-          <p className="evom-disc__eyebrow">Discografia</p>
-        </header>
+        <p className="evom-disc__eyebrow">Discografia</p>
 
-        <div ref={tapeRef} className="evom-disc__tape">
-          {DISCS.map((d) => (
-            <article className="evom-disc__item" key={d.title}>
-              <div className="evom-disc__art">
-                {/* O vinil que assoma por trás da capa. Feito em CSS: um
-                    disco de 447px não existe no projeto, e desenhar o sulco
-                    com gradiente cônico sai mais nítido que qualquer bitmap. */}
-                <span className="evom-disc__vinyl" aria-hidden="true" />
-                <img src={d.cover} alt={`Capa de ${d.title}`} loading="lazy" decoding="async" />
-              </div>
+        {/* A caixa. A perspectiva vive aqui para todas as capas dividirem o
+            mesmo ponto de fuga — perspectiva por card faria cada uma ter a sua
+            câmera, e a pilha deixaria de ler como uma pilha. */}
+        <div className="evom-disc__crate">
+          <span className="evom-disc__crate-front" aria-hidden="true" />
 
-              <div className="evom-disc__meta">
-                <p className="evom-disc__year">{d.year}</p>
-                <h3 className="evom-disc__title">{d.title}</h3>
-                <p className="evom-disc__note">{d.note}</p>
-              </div>
-            </article>
+          {DISCS.map((d, i) => (
+            <div
+              className="evom-disc__card"
+              key={d.title}
+              ref={(el) => {
+                cardsRef.current[i] = el
+              }}
+              style={{ zIndex: DISCS.length - i }}
+            >
+              <img src={d.cover} alt={`Capa de ${d.title}`} loading="lazy" decoding="async" />
+              <span className="evom-disc__sleeve" aria-hidden="true" />
+            </div>
+          ))}
+        </div>
+
+        <div className="evom-disc__metas">
+          {DISCS.map((d, i) => (
+            <div
+              className="evom-disc__meta"
+              key={d.title}
+              ref={(el) => {
+                metaRef.current[i] = el
+              }}
+            >
+              <p className="evom-disc__year">{d.year}</p>
+              <h3 className="evom-disc__title">{d.title}</h3>
+              <p className="evom-disc__note">{d.note}</p>
+            </div>
           ))}
         </div>
       </div>
