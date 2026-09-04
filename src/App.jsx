@@ -10,6 +10,7 @@ import DiscographySection from './components/DiscographySection.jsx'
 import GallerySection from './components/GallerySection.jsx'
 import ClipsSection from './components/ClipsSection.jsx'
 import ShowsSection from './components/ShowsSection.jsx'
+import WorldSection from './components/WorldSection.jsx'
 
 export default function App() {
   const [introSeen, setIntroSeen] = useState(false)
@@ -54,6 +55,9 @@ export default function App() {
 
         {/* Capítulo 10 — o palco acendendo. */}
         <ShowsSection />
+
+        {/* WOW 04 — o planeta feito das fotografias do projeto. */}
+        <WorldSection />
       </main>
     </>
   )

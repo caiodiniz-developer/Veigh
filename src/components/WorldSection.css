@@ -1,0 +1,66 @@
+.evom-world {
+  --evom-ruby: #c41e3a;
+  --evom-bone: #f5efe6;
+  position: relative;
+  background: #030102;
+  color: var(--evom-bone);
+}
+
+.evom-world__stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at 50% 50%, #14060b 0%, #030102 72%);
+}
+
+.evom-world__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Os rótulos são HTML sobre o WebGL: tipografia nítida em qualquer densidade
+   de tela, o que um texto rasterizado dentro do canvas não daria. */
+.evom-world__labels {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.evom-world__step {
+  grid-area: 1 / 1;
+  margin: 0;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: clamp(1.6rem, 6vw, 4.4rem);
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 40px rgba(3, 1, 2, 0.9), 0 8px 40px rgba(3, 1, 2, 0.8);
+  opacity: 0;
+  visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.evom-world__final {
+  position: absolute;
+  z-index: 3;
+  bottom: clamp(10vh, 16vh, 20vh);
+  margin: 0;
+  text-align: center;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: clamp(1.1rem, 3.2vw, 2.4rem);
+  letter-spacing: 0.1em;
+  color: var(--evom-ruby);
+  text-shadow: 0 0 40px rgba(3, 1, 2, 0.95);
+  opacity: 0;
+  visibility: hidden;
+  will-change: transform, opacity;
+}
