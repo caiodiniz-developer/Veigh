@@ -86,3 +86,68 @@ cinética, cursor, grain, transições entre seções e o encerramento.
 Não tenho previews das faixas. Se você tiver direito de uso de trechos curtos,
 suba como `preview-<faixa>.m4a` (15-30s). Sem isso o player fica com a
 interação visual completa, só sem som — que é o combinado.
+
+---
+
+# Prévias de áudio (pendente)
+
+O player das 16 faixas está pronto para tocar áudio de verdade, mas o projeto
+não tem nenhum arquivo de som. Assim que estes existirem, o motor de
+reprodução entra em cima deles.
+
+## Onde e como
+
+Pasta: **`public/previews/`** (criar).
+
+| formato | duração | bitrate |
+| --- | --- | --- |
+| MP3 (ou OGG) | 15 a 30s por faixa | 128 kbps mono já basta para prévia |
+
+Não precisa ser a faixa inteira — o refrão ou a melhor passagem de cada uma.
+Trechos curtos mantêm o load leve e são o que a interface espera.
+
+**Os arquivos precisam ser seus ou licenciados.** Não vou buscar prévias de
+faixas comerciais para preencher.
+
+## Nomes exatos
+
+Estes nomes são derivados dos títulos da tracklist. Usar exatamente assim
+significa zero edição de código depois — o player encontra sozinho.
+
+```
+public/previews/
+  reunioes-comigo-mesmo.mp3
+  hiperfoco.mp3
+  ausencia.mp3
+  artista-generico.mp3
+  taylor.mp3
+  belieber.mp3
+  talvez-voce-precise-de-mim.mp3
+  dono-da-verdade.mp3
+  monaco-freestyle.mp3
+  filho-da-promessa.mp3
+  perdoe-me-por-ser-um-astro.mp3
+  sangue-do-cordeiro.mp3
+  visoes.mp3
+  indiretas-com-a-voz.mp3
+  influencie.mp3
+  amor-ficticio.mp3
+```
+
+Não precisa mandar as 16 de uma vez. O player trata faixa sem prévia
+individualmente: quem tiver arquivo toca, quem não tiver segue com a
+interação visual.
+
+## O que entra quando os arquivos chegarem
+
+- play automático da faixa central quando a seção entra em viewport, com
+  fade-in de volume (~800ms)
+- crossfade de 300ms ao trocar de faixa (arrasto, seta ou clique na capa)
+- fade-out ao sair da seção, para não competir com o vídeo dos clipes
+- waveform e barra de tempo sincronizadas com `currentTime` / `duration` reais
+- mute e volume no player
+- uma fonte de som por vez em toda a página: o vídeo dos clipes e o player
+  se desligam mutuamente
+- lazy-load — só a faixa ativa e as vizinhas baixam
+- botão "Ativar som" quando a política de autoplay do navegador exigir um
+  gesto antes do primeiro áudio
