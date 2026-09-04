@@ -1,0 +1,132 @@
+/* ------------------------------------------------------------- letterbox */
+
+/* Barras do quadro anamórfico. Ficam por cima de tudo, inclusive dos canvas
+   WebGL, e nunca interceptam ponteiro. */
+.evom-cine__bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 9990;
+  height: 10.5vh;
+  background: #000;
+  pointer-events: none;
+  will-change: height;
+}
+
+.evom-cine__bar--top {
+  top: 0;
+  box-shadow: 0 6px 26px rgba(0, 0, 0, 0.7);
+}
+
+.evom-cine__bar--bottom {
+  bottom: 0;
+  box-shadow: 0 -6px 26px rgba(0, 0, 0, 0.7);
+}
+
+/* ------------------------------------------------------ cartela de capítulo */
+
+/* Créditos de filme, não navegação: miúda, no canto, e some sozinha. */
+.evom-cine__card {
+  position: fixed;
+  z-index: 9992;
+  left: clamp(20px, 5vw, 64px);
+  bottom: calc(10.5vh + clamp(18px, 4vh, 40px));
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.95);
+  will-change: transform, opacity;
+}
+
+.evom-cine__num {
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  color: #c41e3a;
+}
+
+.evom-cine__title {
+  font-size: 0.7rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgba(245, 239, 230, 0.72);
+}
+
+/* ------------------------------------------------------------ botão de som */
+
+.evom-cine__sound {
+  position: fixed;
+  z-index: 9993;
+  right: clamp(16px, 4vw, 44px);
+  bottom: calc(10.5vh + clamp(16px, 3vh, 32px));
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border: 1px solid rgba(245, 239, 230, 0.22);
+  border-radius: 999px;
+  background: rgba(8, 2, 4, 0.6);
+  backdrop-filter: blur(10px);
+  color: rgba(245, 239, 230, 0.7);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.66rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 220ms ease, border-color 220ms ease;
+}
+
+.evom-cine__sound:hover,
+.evom-cine__sound:focus-visible {
+  color: #fff8ec;
+  border-color: rgba(196, 30, 58, 0.8);
+}
+
+/* Equalizador: parado quando o som está desligado, dançando quando ligado.
+   É o indicador de estado — dispensa rótulo explicando o que está acontecendo. */
+.evom-cine__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+
+.evom-cine__bars i {
+  width: 2px;
+  height: 3px;
+  background: currentColor;
+  border-radius: 1px;
+}
+
+.evom-cine__sound.is-on {
+  color: #fff8ec;
+  border-color: rgba(196, 30, 58, 0.55);
+}
+
+.evom-cine__sound.is-on .evom-cine__bars i {
+  background: #c41e3a;
+  animation: evom-eq 900ms ease-in-out infinite alternate;
+}
+
+.evom-cine__sound.is-on .evom-cine__bars i:nth-child(2) { animation-delay: -180ms; }
+.evom-cine__sound.is-on .evom-cine__bars i:nth-child(3) { animation-delay: -420ms; }
+.evom-cine__sound.is-on .evom-cine__bars i:nth-child(4) { animation-delay: -640ms; }
+
+@keyframes evom-eq {
+  from { height: 3px; }
+  to   { height: 12px; }
+}
+
+@media (max-width: 600px) {
+  .evom-cine__sound {
+    font-size: 0.6rem;
+    padding: 8px 13px;
+  }
+
+  .evom-cine__card {
+    left: 16px;
+  }
+}
