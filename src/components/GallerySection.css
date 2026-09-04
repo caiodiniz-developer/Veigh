@@ -1,0 +1,97 @@
+.evom-wall {
+  --evom-ruby: #c41e3a;
+  --evom-ink: #080204;
+  --evom-bone: #f5efe6;
+
+  position: relative;
+  background: radial-gradient(ellipse at 50% 30%, #1a070d 0%, var(--evom-ink) 70%);
+  color: var(--evom-bone);
+}
+
+.evom-wall__stage {
+  position: relative;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+}
+
+.evom-wall__eyebrow,
+.evom-wall__hint {
+  position: absolute;
+  z-index: 3;
+  margin: 0;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.evom-wall__eyebrow {
+  top: clamp(20px, 5vh, 54px);
+  left: clamp(20px, 5vw, 72px);
+  color: rgba(245, 239, 230, 0.45);
+}
+
+.evom-wall__hint {
+  bottom: clamp(20px, 5vh, 48px);
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(245, 239, 230, 0.3);
+}
+
+/* A superfície é mais larga que a tela. --drag é o deslocamento do arrasto,
+   somado ao x que o ScrollTrigger aplica — separar os dois em propriedades
+   diferentes evita que um sobrescreva o outro. */
+.evom-wall__surface {
+  --drag: 0;
+  position: absolute;
+  inset: 0;
+  width: 165vw;
+  translate: calc(var(--drag) * 1px) 0;
+  cursor: grab;
+  touch-action: pan-y;
+  will-change: transform;
+}
+
+.evom-wall__surface.is-dragging {
+  cursor: grabbing;
+}
+
+.evom-wall__shot {
+  position: absolute;
+  margin: 0;
+  width: clamp(120px, 13vw, 220px);
+  padding: 8px 8px 26px;
+  background: #ece6dc;
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.66);
+  transform: rotate(var(--rot)) scale(var(--scale));
+  transition: transform 420ms cubic-bezier(0.22, 0.9, 0.3, 1), box-shadow 420ms ease;
+  will-change: transform;
+}
+
+/* Hover aproxima e endireita: a foto "sai da parede" para ser olhada. */
+.evom-wall__shot:hover {
+  transform: rotate(0deg) scale(calc(var(--scale) * 1.16));
+  box-shadow: 0 34px 80px rgba(0, 0, 0, 0.8);
+  z-index: 5;
+}
+
+.evom-wall__shot img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background: #1a0a0e;
+  -webkit-user-drag: none;
+}
+
+@media (max-width: 760px) {
+  .evom-wall__surface {
+    width: 320vw;
+  }
+
+  .evom-wall__shot {
+    width: 34vw;
+  }
+}
