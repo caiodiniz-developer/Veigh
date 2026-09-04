@@ -415,8 +415,10 @@ export default function IntroSequence({
 
         <div ref={contentRef} className="evom-intro__content">
           <div className="evom-intro__letters" aria-hidden="true">
+            {/* --letter leva o PNG da própria letra para o CSS: é o que
+                permite o brilho se mascarar na forma da joia. */}
             {letters.map((src, index) => (
-              <span className="evom-intro__slot" key={src}>
+              <span className="evom-intro__slot" key={src} style={{ '--letter': `url(${src})` }}>
                 <img
                   ref={(el) => {
                     lettersRef.current[index] = el

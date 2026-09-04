@@ -362,25 +362,42 @@
    diferentes — junto, elas piscariam como um cartaz. */
 .evom-intro__slot {
   position: relative;
-  overflow: hidden;
+  /* Sem overflow: hidden aqui. Ele recortava o brilho num retângulo e, junto,
+     decepava o drop-shadow do pingente — dava para ver a caixa desenhada em
+     volta de cada letra. Quem confina o brilho é a máscara abaixo. */
 }
 
 .evom-intro__slot::after {
   content: '';
   position: absolute;
-  inset: -30%;
+  inset: 0;
   pointer-events: none;
-  background: linear-gradient(
+  background-image: linear-gradient(
     68deg,
-    transparent 38%,
-    rgba(255, 252, 245, 0.5) 47%,
-    rgba(255, 255, 255, 0.85) 50%,
-    rgba(255, 252, 245, 0.5) 53%,
-    transparent 62%
+    transparent 42%,
+    rgba(255, 252, 245, 0.34) 48%,
+    rgba(255, 255, 255, 0.62) 50%,
+    rgba(255, 252, 245, 0.34) 52%,
+    transparent 58%
   );
+  /* Faixa três vezes mais larga que a caixa: é ela que desliza, dentro de um
+     elemento parado. */
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
   mix-blend-mode: screen;
-  transform: translateX(-130%);
   animation: evom-glint 7s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+
+  /* A máscara é o PNG da própria letra. O reflexo passa pela joia e some no
+     vazio em volta — que é como luz se comporta numa peça cravejada, e não
+     como se comportaria dentro de uma caixa retangular. */
+  -webkit-mask-image: var(--letter);
+  mask-image: var(--letter);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
 }
 
 /* Cada letra brilha no seu tempo. O intervalo longo é proposital: reflexo
@@ -389,7 +406,12 @@
 .evom-intro__slot:nth-child(3)::after { animation-delay: 2.4s; }
 .evom-intro__slot:nth-child(4)::after { animation-delay: 3.3s; }
 
+/* Move o GRADIENTE, não o elemento.
+   Transformar o ::after arrastava a máscara junto — a faixa aparecia com o
+   formato da letra, mas deslocada para fora dela, boiando ao lado do pingente.
+   Com o elemento parado, a máscara continua alinhada à joia e só a luz corre
+   por dentro. */
 @keyframes evom-glint {
-  0%, 62% { transform: translateX(-130%); }
-  76%, 100% { transform: translateX(130%); }
+  0%, 62% { background-position: 130% 0; }
+  76%, 100% { background-position: -130% 0; }
 }
