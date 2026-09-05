@@ -29,6 +29,35 @@ const STATS = [
   { value: 30, prefix: 'UNDER ', suffix: '', label: 'Forbes', decimals: 0 },
 ]
 
+/**
+ * Uma roda de dígito por casa decimal, como num odômetro de painel.
+ *
+ * A versão anterior trocava o textContent a cada quadro. Funcionava, mas
+ * substituir um glifo por outro não é a mesma leitura de um número que ROLA:
+ * o odômetro é o objeto que a cultura associa a distância percorrida, e é
+ * exatamente disso que a seção fala. Cada roda carrega 0-9 mais um 0 no fim,
+ * porque sem o décimo-primeiro quadro a passagem de 9 para 0 volta a fita
+ * inteira de baixo para cima em vez de continuar girando.
+ */
+function Odometer({ value }) {
+  const places = String(value).length
+  return (
+    <span className="evom-odo" data-value={value} role="text" aria-label={String(value)}>
+      {Array.from({ length: places }, (_, i) => (
+        <span className="evom-odo__wheel" key={i} aria-hidden="true">
+          <span className="evom-odo__strip">
+            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map((d, k) => (
+              <span className="evom-odo__cell" key={k}>
+                {d}
+              </span>
+            ))}
+          </span>
+        </span>
+      ))}
+    </span>
+  )
+}
+
 export default function StatsSection() {
   const rootRef = useRef(null)
   const skyRef = useRef(null)
@@ -39,9 +68,33 @@ export default function StatsSection() {
 
     const ctx = gsap.context(() => {
       root.querySelectorAll('.evom-stats__item').forEach((item) => {
-        const num = item.querySelector('.evom-stats__num-value')
-        const target = Number(num.dataset.value)
+        const odo = item.querySelector('.evom-odo')
+        const wheels = [...item.querySelectorAll('.evom-odo__strip')]
+        const target = Number(odo.dataset.value)
         const counter = { v: 0 }
+
+        // Onde cada roda para, dado o valor corrente.
+        //
+        // A roda das unidades gira contínua. As de cima NÃO: num odômetro de
+        // verdade a dezena fica parada quase a volta toda e só vira junto no
+        // fim, arrastada pela unidade. Sem isso todas as casas giram na mesma
+        // proporção e o resultado é um borrão de meios-dígitos que nunca
+        // mostra um número legível.
+        const wheelAt = (v, place) => {
+          const x = v / 10 ** place
+          if (place === 0) return x % 10
+          const base = Math.floor(x)
+          const f = x - base
+          return (base + (f < 0.9 ? 0 : (f - 0.9) / 0.1)) % 10
+        }
+
+        const paint = () => {
+          wheels.forEach((strip, i) => {
+            const place = wheels.length - 1 - i
+            strip.style.setProperty('--d', wheelAt(counter.v, place).toFixed(4))
+          })
+        }
+        paint()
 
         gsap
           .timeline({
@@ -54,9 +107,7 @@ export default function StatsSection() {
             {
               v: target,
               ease: 'none',
-              onUpdate: () => {
-                num.textContent = Math.round(counter.v).toLocaleString('pt-BR')
-              },
+              onUpdate: paint,
             },
             0
           )
@@ -117,12 +168,12 @@ export default function StatsSection() {
       {STATS.map((s) => (
         <div className="evom-stats__item" key={s.label}>
           <p className="evom-stats__num">
+            {/* Prefixo e sufixo em spans próprios: dentro de um flex, texto
+                solto vira item anônimo e o espaço de "TOP " colapsa. */}
             <span className="evom-stats__num-text">
-              {s.prefix}
-              <span className="evom-stats__num-value" data-value={s.value}>
-                0
-              </span>
-              {s.suffix}
+              {s.prefix ? <span className="evom-stats__fix">{s.prefix}</span> : null}
+              <Odometer value={s.value} />
+              {s.suffix ? <span className="evom-stats__fix">{s.suffix}</span> : null}
             </span>
           </p>
           <p className="evom-stats__label">{s.label}</p>

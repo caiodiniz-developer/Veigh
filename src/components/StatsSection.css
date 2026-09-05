@@ -124,3 +124,51 @@
   transform: translateX(-50%);
   background: linear-gradient(90deg, transparent, rgba(24, 10, 6, 0.35), transparent);
 }
+
+/* ------------------------------------------------------------- odômetro */
+
+/* Alinhar rodas com letras dá errado por baseline: um inline-block com
+   overflow escondido passa a ter a baseline na borda de baixo, e os dígitos
+   sobem em relação ao "TOP". A saída é não depender de baseline nenhuma —
+   com line-height 1 toda caixa filha tem exatamente 1em de altura, e
+   centralizar caixas de mesma altura alinha os desenhos por construção. */
+.evom-stats__num {
+  line-height: 1;
+}
+
+.evom-stats__num-text {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.evom-stats__fix {
+  display: block;
+  height: 1em;
+}
+
+.evom-odo {
+  display: inline-flex;
+  /* Cada roda é uma coluna independente; sem tabular-nums o 1 é mais estreito
+     que o 8 e a fita inteira balança de largura enquanto gira. */
+  font-variant-numeric: tabular-nums;
+}
+
+.evom-odo__wheel {
+  display: block;
+  height: 1em;
+  overflow: hidden;
+}
+
+.evom-odo__strip {
+  display: block;
+  /* --d é a posição da roda em dígitos; a fita anda um quadro por unidade. */
+  transform: translateY(calc(var(--d, 0) * -1em));
+  will-change: transform;
+}
+
+.evom-odo__cell {
+  display: block;
+  height: 1em;
+  line-height: 1;
+}

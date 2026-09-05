@@ -36,3 +36,142 @@
     left: 16px;
   }
 }
+
+/* ---------------------------------------------------- barra de capítulos */
+
+/* Treze traços na borda direita. Em repouso são fios de 1px com 14% de opacidade
+   — a barra existe na visão periférica e some quando você está lendo. */
+.evom-cine__rail {
+  position: fixed;
+  z-index: 9991;
+  right: clamp(14px, 2.2vw, 30px);
+  top: 50%;
+  translate: 0 -50%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: clamp(9px, 1.4vh, 15px);
+  /* --p é o progresso da página. Fica aqui e não no tick porque é do
+     documento inteiro, não de um capítulo. */
+  --p: 0;
+}
+
+/* O fio de progresso atrás dos traços: uma linha que preenche de cima pra
+   baixo conforme a página anda. Dá a leitura contínua que treze pontos
+   discretos não dão. */
+.evom-cine__rail::before {
+  content: '';
+  position: absolute;
+  right: 3px;
+  top: -6px;
+  bottom: -6px;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    #c41e3a 0%,
+    #c41e3a calc(var(--p) * 100%),
+    rgba(245, 239, 230, 0.1) calc(var(--p) * 100%),
+    rgba(245, 239, 230, 0.1) 100%
+  );
+  pointer-events: none;
+}
+
+.evom-cine__tick {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  /* A área de clique é maior que o traço: 7px de alvo é inclicável. */
+  height: 10px;
+  margin: -3px 0;
+}
+
+/* O traço em si. Nasce curto e branco-fraco; o capítulo corrente fica longo
+   e vinho. */
+.evom-cine__tick::after {
+  content: '';
+  width: 12px;
+  height: 1px;
+  background: rgba(245, 239, 230, 0.24);
+  transition: width 320ms cubic-bezier(0.2, 0.7, 0.2, 1), background 320ms ease;
+}
+
+.evom-cine__tick:hover::after {
+  width: 22px;
+  background: rgba(245, 239, 230, 0.75);
+}
+
+.evom-cine__tick[data-on='true']::after {
+  width: 30px;
+  background: #c41e3a;
+}
+
+/* O nome do capítulo só aparece com o mouse em cima — e mesmo assim entra
+   deslizando da direita, para não empurrar nada. */
+.evom-cine__tick-label {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  white-space: nowrap;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(245, 239, 230, 0.82);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.95);
+  opacity: 0;
+  translate: 8px 0;
+  pointer-events: none;
+  transition: opacity 260ms ease, translate 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.evom-cine__tick:hover .evom-cine__tick-label,
+.evom-cine__tick:focus-visible .evom-cine__tick-label {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.evom-cine__tick-label em {
+  font-style: normal;
+  color: #c41e3a;
+  font-size: 0.58rem;
+}
+
+.evom-cine__tick:focus-visible {
+  outline: none;
+}
+
+.evom-cine__tick:focus-visible::after {
+  width: 30px;
+  background: #c41e3a;
+}
+
+/* Na tela pequena a barra vira só o fio de progresso: treze alvos de toque
+   encostados na borda direita brigam com o gesto de voltar do sistema. */
+@media (max-width: 760px) {
+  .evom-cine__rail {
+    gap: 6px;
+    right: 8px;
+  }
+
+  .evom-cine__tick {
+    pointer-events: none;
+  }
+
+  .evom-cine__tick::after {
+    width: 6px;
+  }
+
+  .evom-cine__tick[data-on='true']::after {
+    width: 14px;
+  }
+
+  .evom-cine__tick-label {
+    display: none;
+  }
+}

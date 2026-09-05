@@ -1,28 +1,40 @@
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 /**
- * A linha do tempo como estrada.
+ * A linha do tempo como estrada — agora com cenário modelado.
  *
- * A câmera percorre uma estrada escura; os anos estão pintados no asfalto e as
- * fotografias daquele período ficam de pé nas margens. Chegar a um ano
- * desacelera a câmera e muda a luz da cena inteira.
+ * A versão anterior era inteiramente procedural: prédios eram caixas com
+ * janelas desenhadas no shader e os carros eram meia dúzia de primitivas
+ * fundidas. Funcionava como silhueta e nunca como lugar. Aqui a cidade e os
+ * carros são modelos de verdade, e nas margens estão os recortes do artista em
+ * corpo inteiro, dois por era, na altura em que a câmera passa.
  *
- * Por que estrada e não linha, disco ou constelação: o site já tem uma esfera
- * de partículas (o planeta) e já tem vinil (a discografia). Repetir qualquer um
- * dos dois faria a timeline parecer variação de outra seção em vez de capítulo
- * próprio.
+ * O que sobreviveu da versão anterior é o que não era substituível por asset:
+ * o céu de fim de tarde, o asfalto, os halos dos postes, os anos pintados no
+ * chão e — principalmente — a curva de desaceleração. Ela é a peça central:
+ * o scroll não mapeia linearmente para a posição da câmera, e perto de cada
+ * ano a curva achata, então a mesma rolagem avança bem menos estrada. É o que
+ * produz a sensação de documentário: o tempo passa mais devagar nos
+ * acontecimentos.
  *
- * A desaceleração é a peça central. O scroll não mapeia linearmente para a
- * posição da câmera: perto de cada ano a curva achata, então a mesma rolagem
- * avança bem menos estrada. É o que produz a sensação de documentário — o
- * tempo passa mais devagar nos acontecimentos.
+ * Sobre custo: os dois modelos somam quase meio milhão de triângulos (o carro
+ * sozinho tem 414 mil). Por isso nada aqui é clonado como objeto — cada malha
+ * do modelo vira UM InstancedMesh, e as malhas que dividem material são
+ * fundidas antes. É a diferença entre 104 desenhos por carro e 26 desenhos
+ * para todos eles.
  */
 
 const ROAD_W = 9
 const ROAD_LEN = 420
 const CELL = 256
 const COLS = 6
+
+// Onde a névoa engole a cena. Amarra o shader do asfalto, o fog dos modelos e
+// o far da câmera: se os três discordarem, aparece a borda do mundo.
+const FOG_NEAR = 34
+const FOG_FAR = 195
 
 const SKY_VERT = /* glsl */ `
   varying vec2 vUv;
@@ -106,6 +118,8 @@ const ROAD_FRAG = /* glsl */ `
   uniform vec3 uLight;
   uniform vec3 uFog;
   uniform float uLen;
+  uniform float uNear;
+  uniform float uFar;
   varying vec2 vUv;
   varying float vDepth;
 
@@ -128,164 +142,10 @@ const ROAD_FRAG = /* glsl */ `
     float edge = smoothstep(0.035, 0.0, abs(abs(vUv.x - 0.5) - 0.47));
     road = mix(road, uLight, edge * 0.55);
 
-    // Névoa por distância: o fim da estrada some no ambiente, sem corte.
-    float fog = smoothstep(18.0, 165.0, vDepth);
+    // Névoa por distância, na MESMA faixa dos modelos: asfalto sumindo antes
+    // ou depois dos prédios denuncia as duas camadas como coisas separadas.
+    float fog = smoothstep(uNear, uFar, vDepth);
     gl_FragColor = vec4(mix(road, uFog, fog), 1.0);
-  }
-`
-
-
-const CITY_VERT = /* glsl */ `
-  attribute vec3 aPos;
-  attribute vec3 aScale;
-  attribute float aSeed;
-
-  varying vec3 vLocal;
-  varying vec3 vNormal;
-  varying float vSeed;
-  varying float vDepth;
-
-  void main() {
-    vec3 scaled = position * aScale;
-    // O prédio nasce do chão: a caixa é deslocada meia altura para cima,
-    // senão metade dela ficaria enterrada no asfalto.
-    vec3 world = aPos + scaled + vec3(0.0, aScale.y * 0.5, 0.0);
-    vec4 mv = modelViewMatrix * vec4(world, 1.0);
-    vDepth = -mv.z;
-    vLocal = scaled;
-    vNormal = normal;
-    vSeed = aSeed;
-    gl_Position = projectionMatrix * mv;
-  }
-`
-
-const CITY_FRAG = /* glsl */ `
-  precision highp float;
-  uniform vec3 uLight;
-  uniform vec3 uFog;
-  uniform float uTime;
-  varying vec3 vLocal;
-  varying vec3 vNormal;
-  varying float vSeed;
-  varying float vDepth;
-
-  float hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-  }
-
-  void main() {
-    // Fachada quase preta: a cidade é silhueta, não cenário detalhado.
-    vec3 col = vec3(0.028, 0.020, 0.026);
-
-    // Janelas acesas. A grade é calculada no espaço do próprio prédio, então
-    // todas as janelas têm o mesmo tamanho independentemente de o prédio ser
-    // alto ou largo — que é o que faz a escala urbana ficar crível.
-    if (abs(vNormal.y) < 0.5) {
-      vec2 face = abs(vNormal.x) > 0.5 ? vec2(vLocal.z, vLocal.y) : vec2(vLocal.x, vLocal.y);
-      vec2 cell = floor(face / vec2(0.42, 0.62));
-      float lit = step(0.66, hash(cell + vSeed * 37.0));
-      // A cidade vive: cada janela tem o seu próprio relógio, e de tempos em
-      // tempos apaga e volta. Sem isso a fachada é um padrão fixo, e padrão
-      // fixo o olho identifica como textura em segundos.
-      float slot = floor(uTime * 0.09 + hash(cell) * 40.0);
-      lit *= step(0.22, hash(cell + slot * 7.3));
-      // Nem toda janela acesa tem o mesmo brilho: prédio com brilho uniforme
-      // lê como textura, não como janelas.
-      float strength = 0.35 + hash(cell + vSeed * 91.0) * 0.65;
-      vec2 inCell = fract(face / vec2(0.42, 0.62));
-      float pane = step(0.12, inCell.x) * step(inCell.x, 0.88)
-                 * step(0.16, inCell.y) * step(inCell.y, 0.84);
-      col += uLight * lit * pane * strength * 1.5;
-    }
-
-    // Luz de obstáculo no topo: vermelha, piscando fora de sincronia entre
-    // prédios. É o detalhe que datou a silhueta como cidade grande de verdade.
-    if (vNormal.y > 0.5) {
-      float blink = step(0.72, fract(uTime * 0.35 + vSeed));
-      col += vec3(0.9, 0.08, 0.14) * blink * step(0.55, hash(vec2(vSeed, 3.1)));
-    }
-
-    float fog = smoothstep(26.0, 175.0, vDepth);
-    gl_FragColor = vec4(mix(col, uFog, fog), 1.0);
-  }
-`
-
-const CAR_VERT = /* glsl */ `
-  attribute vec3 aPos;
-  attribute float aSize;
-  attribute float aSeed;
-
-  varying vec2 vUv;
-  varying float vDepth;
-  varying float vSeed;
-
-  void main() {
-    // A posição vem da CPU, junto com a do carro que carrega esta luz.
-    vec4 mv = modelViewMatrix * vec4(aPos, 1.0);
-    mv.xy += position.xy * aSize;
-    vDepth = -mv.z;
-    vUv = uv;
-    vSeed = aSeed;
-    gl_Position = projectionMatrix * mv;
-  }
-`
-
-const CAR_FRAG = /* glsl */ `
-  precision highp float;
-  varying vec2 vUv;
-  varying float vDepth;
-  varying float vSeed;
-
-  void main() {
-    vec2 d = vUv - 0.5;
-    // Achatado na horizontal: farol visto de frente é um traço, não um ponto.
-    d.y *= 2.6;
-    float r = length(d) * 2.0;
-    float a = pow(max(0.0, 1.0 - r), 2.2);
-    // Núcleo estourado no meio do halo: farol tem um ponto branco duro dentro
-    // do brilho, e é ele que faz a luz ler como lâmpada e não como mancha.
-    a += pow(max(0.0, 1.0 - r * 2.6), 6.0) * 0.9;
-
-    // Quem vem na direção da câmera mostra farol; quem se afasta, lanterna.
-    vec3 col = vSeed > 0.5
-      ? vec3(1.0, 0.94, 0.82)
-      : vec3(1.0, 0.14, 0.10);
-
-    a *= 1.0 - smoothstep(70.0, 240.0, vDepth);
-    gl_FragColor = vec4(col * a, a);
-  }
-`
-
-const BODY_VERT = /* glsl */ `
-  varying vec3 vCol;
-  varying float vDepth;
-  void main() {
-    vCol = color;
-    vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
-    vDepth = -mv.z;
-    gl_Position = projectionMatrix * mv;
-  }
-`
-
-const BODY_FRAG = /* glsl */ `
-  precision highp float;
-  uniform vec3 uLight;
-  uniform vec3 uFog;
-  varying vec3 vCol;
-  varying float vDepth;
-  void main() {
-    // Carroceria sempre vinho, independentemente da era.
-    //
-    // Antes ela herdava a luz do capitulo e mudava de cor a cada trecho. Numa
-    // paleta em que o vinho e o fio que costura o site inteiro, carro que muda
-    // de cor le como objeto emprestado de outra cena.
-    vec3 wine = vec3(0.62, 0.09, 0.16);
-    float shade = (vCol.r + vCol.g + vCol.b) / 3.0;
-    vec3 col = wine * shade * 9.0;
-    // Um respiro da luz da era so no realce, para o carro nao ficar chapado.
-    col += uLight * shade * 1.2;
-    float fog = smoothstep(24.0, 165.0, vDepth);
-    gl_FragColor = vec4(mix(col, uFog, fog), 1.0);
   }
 `
 
@@ -313,124 +173,185 @@ const GLOW_FRAG = /* glsl */ `
     float a = pow(max(0.0, 1.0 - d), 2.6);
     // Some com a distância junto com o resto: um poste brilhando no fim da
     // névoa entregaria que a névoa é falsa.
-    a *= 1.0 - smoothstep(30.0, 170.0, vDepth);
+    a *= 1.0 - smoothstep(30.0, 175.0, vDepth);
     gl_FragColor = vec4(uLight * a, a);
   }
 `
 
-const BILL_VERT = /* glsl */ `
+const CAR_VERT = /* glsl */ `
+  attribute vec3 aPos;
+  attribute float aSize;
+  attribute float aSeed;
+  varying vec2 vUv;
+  varying float vSeed;
+  varying float vDepth;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(aPos, 1.0);
+    mv.xy += position.xy * aSize;
+    vDepth = -mv.z;
+    vUv = uv;
+    vSeed = aSeed;
+    gl_Position = projectionMatrix * mv;
+  }
+`
+
+const CAR_FRAG = /* glsl */ `
+  precision highp float;
+  varying vec2 vUv;
+  varying float vSeed;
+  varying float vDepth;
+  void main() {
+    float d = length(vUv - 0.5) * 2.0;
+    float a = pow(max(0.0, 1.0 - d), 3.0);
+    // Faróis brancos vêm na direção da câmera; lanternas vermelhas se afastam.
+    vec3 c = mix(vec3(0.85, 0.12, 0.1), vec3(1.0, 0.96, 0.88), step(0.5, vSeed));
+    a *= 1.0 - smoothstep(40.0, 200.0, vDepth);
+    gl_FragColor = vec4(c * a, a);
+  }
+`
+
+const YEAR_VERT = /* glsl */ `
   attribute vec3 aPos;
   attribute vec2 aCell;
   attribute vec2 aSize;
-  attribute float aFlat;
-
   uniform vec2 uCellSize;
-
   varying vec2 vUv;
   varying float vDepth;
-
   void main() {
-    vec3 p = aPos;
-    vec4 mv;
-
-    if (aFlat > 0.5) {
-      // Pintado no chão: o quad fica deitado, não encara a câmera.
-      vec3 local = vec3(position.x * aSize.x, 0.0, -position.y * aSize.y);
-      mv = modelViewMatrix * vec4(p + local, 1.0);
-    } else {
-      // De pé na margem, sempre virado para a câmera.
-      mv = modelViewMatrix * vec4(p, 1.0);
-      mv.xy += position.xy * aSize;
-    }
-
+    // Pintado no chão: o quad fica deitado, não encara a câmera.
+    vec3 local = vec3(position.x * aSize.x, 0.0, -position.y * aSize.y);
+    vec4 mv = modelViewMatrix * vec4(aPos + local, 1.0);
     vDepth = -mv.z;
     gl_Position = projectionMatrix * mv;
     vUv = aCell + uv * uCellSize;
   }
 `
 
-const BILL_FRAG = /* glsl */ `
+const YEAR_FRAG = /* glsl */ `
   precision highp float;
   uniform sampler2D uAtlas;
   uniform vec3 uFog;
   uniform vec3 uLight;
   varying vec2 vUv;
   varying float vDepth;
-
   void main() {
     vec4 c = texture2D(uAtlas, vUv);
     if (c.a < 0.04) discard;
-    // A luz da era tinge tudo o que está na estrada.
-    // As fotos não se apagam com a era: elas são o assunto da margem e
-    // precisam permanecer legíveis. A luz só as tinge de leve.
-    c.rgb = mix(c.rgb, c.rgb * uLight * 1.9, 0.18) * 2.1;
-    float fog = smoothstep(60.0, 240.0, vDepth);
+    c.rgb = mix(c.rgb, c.rgb * uLight * 1.9, 0.35) * 1.6;
+    float fog = smoothstep(50.0, 210.0, vDepth);
     gl_FragColor = vec4(mix(c.rgb, uFog, fog), c.a);
   }
 `
 
+/* ========================================================== modelos 3D === */
+
 /**
- * Modela um carro e devolve UMA geometria só.
+ * Carrega um .glb e devolve as malhas já normalizadas e fundidas por material.
  *
- * Carroceria, cabine, quatro rodas e a faixa de vidro são construídos
- * separados e fundidos com mergeGeometries. Fundir é o que permite instanciar:
- * quatorze carros viram uma draw call em vez de noventa e oito meshes.
+ * Três coisas acontecem aqui, e nenhuma é opcional:
  *
- * Não há luz na cena — de noite, numa estrada, o carro é silhueta. Em vez de
- * material que reage a luz, a forma é lida por cor de vértice assada a partir
- * da normal: face para cima recebe o céu, face lateral fica quase preta. Sai
- * mais barato que um MeshStandardMaterial com luzes e, num contraluz, é
- * exatamente o que o olho espera ver.
+ * 1. NORMALIZAÇÃO. Modelo de banco vem em escala e origem arbitrárias — um
+ *    deles nasce com 400 unidades de altura e o pivô no meio do volume. A cena
+ *    trabalha em metros com o chão em y=0, então cada modelo é reescalado pela
+ *    altura pedida, centrado no plano horizontal e apoiado na base.
+ *
+ * 2. ORIENTAÇÃO. Não dá para supor para que lado o modelo aponta. O eixo
+ *    horizontal mais comprido de um carro é o comprimento dele, então medir a
+ *    caixa e girar 90° quando o comprimento está em X alinha qualquer modelo à
+ *    estrada sem número mágico.
+ *
+ * 3. FUSÃO POR MATERIAL. O carro tem 104 malhas separadas. Instanciar cada uma
+ *    são 104 desenhos por frame; fundir as que dividem material derruba para
+ *    26. A matriz de cada malha dentro do modelo é assada na geometria antes
+ *    da fusão — depois disso não existe mais hierarquia para preservar.
  */
-function buildCar() {
-  const parts = []
+async function carregarModelo(url, { altura, alinharZ = false }) {
+  const gltf = await new GLTFLoader().loadAsync(url)
+  const raiz = gltf.scene
+  raiz.updateWorldMatrix(true, true)
 
-  const body = new THREE.BoxGeometry(1.85, 0.62, 4.3)
-  body.translate(0, 0.62, 0)
-  parts.push(body)
+  const caixa = new THREE.Box3().setFromObject(raiz)
+  const tam = caixa.getSize(new THREE.Vector3())
+  const centro = caixa.getCenter(new THREE.Vector3())
+  if (!(tam.y > 0)) return null
 
-  // Cabine recuada e mais estreita: é o degrau entre capô e teto que faz a
-  // silhueta ler como carro e não como caixa.
-  const cabin = new THREE.BoxGeometry(1.62, 0.56, 2.15)
-  cabin.translate(0, 1.2, -0.18)
-  parts.push(cabin)
+  const escala = altura / tam.y
+  const girar = alinharZ && tam.x > tam.z
 
-  const glass = new THREE.BoxGeometry(1.66, 0.3, 2.2)
-  glass.translate(0, 1.2, -0.18)
-  parts.push(glass)
+  // Ordem: primeiro traz a base para a origem, depois escala, depois gira.
+  const normalizar = new THREE.Matrix4()
+    .makeRotationY(girar ? Math.PI / 2 : 0)
+    .multiply(new THREE.Matrix4().makeScale(escala, escala, escala))
+    .multiply(new THREE.Matrix4().makeTranslation(-centro.x, -caixa.min.y, -centro.z))
 
-  const wheel = () => new THREE.CylinderGeometry(0.34, 0.34, 0.26, 10)
-  for (const [x, z] of [[-0.86, 1.32], [0.86, 1.32], [-0.86, -1.36], [0.86, -1.36]]) {
-    const w = wheel()
-    w.rotateZ(Math.PI / 2)
-    w.translate(x, 0.34, z)
-    parts.push(w)
+  // Agrupa por material. Fundir exige que os atributos batam exatamente, então
+  // os extras (tangent, uv1, color) saem: a cena não usa nenhum deles, e um
+  // atributo presente em metade das malhas faz mergeGeometries devolver null.
+  const grupos = new Map()
+  raiz.traverse((o) => {
+    if (!o.isMesh || !o.geometry) return
+    const g = o.geometry.clone()
+    for (const nome of Object.keys(g.attributes)) {
+      if (!['position', 'normal', 'uv'].includes(nome)) g.deleteAttribute(nome)
+    }
+    if (!g.attributes.uv) {
+      // Sem uv a fusão quebra; um uv nulo é inofensivo porque o material
+      // dessa malha não tem textura para amostrar.
+      const n = g.attributes.position.count
+      g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2))
+    }
+    if (!g.attributes.normal) g.computeVertexNormals()
+
+    g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(normalizar, o.matrixWorld))
+
+    const mat = Array.isArray(o.material) ? o.material[0] : o.material
+    const chave = mat.uuid
+    if (!grupos.has(chave)) grupos.set(chave, { material: mat, geos: [] })
+    grupos.get(chave).geos.push(g)
+  })
+
+  const partes = []
+  for (const { material, geos } of grupos.values()) {
+    const geo = geos.length === 1 ? geos[0] : mergeGeometries(geos, false)
+    if (!geo) {
+      // Fusão recusada (atributos incompatíveis): entra sem fundir, porque
+      // perder a malha é pior que gastar desenhos a mais.
+      geos.forEach((g) => partes.push({ geometry: g, material }))
+      continue
+    }
+    if (geos.length > 1) geos.forEach((g) => g.dispose())
+    partes.push({ geometry: geo, material })
   }
 
-  const car = mergeGeometries(parts, false)
-
-  // Cor por vértice a partir da normal: topo claro, lateral escura.
-  const normal = car.attributes.normal
-  const colors = new Float32Array(normal.count * 3)
-  for (let i = 0; i < normal.count; i++) {
-    const up = Math.max(0, normal.getY(i))
-    const side = Math.abs(normal.getX(i))
-    // Escurissimo de proposito. Na primeira tentativa isto valia ate 0.4 e,
-    // convertido para sRGB na saida, os carros saiam cinza-claro contra uma
-    // rua noturna — pareciam recortados e colados na cena.
-    const v = 0.012 + up * 0.055 + side * 0.008
-    colors[i * 3] = v
-    colors[i * 3 + 1] = v * 0.94
-    colors[i * 3 + 2] = v * 0.98
-  }
-  car.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-  return car
+  const comprimento = (girar ? tam.x : tam.z) * escala
+  const largura = (girar ? tam.z : tam.x) * escala
+  return { partes, comprimento, largura, altura }
 }
 
-/** Desenha anos e fotos num atlas só: uma textura, uma draw call. */
-async function buildAtlas(years, photos) {
-  const items = years.length + photos.length
-  const rows = Math.ceil(items / COLS)
+/** Um InstancedMesh por parte, todos compartilhando as mesmas N matrizes. */
+function instanciar(modelo, quantidade, scene, fog) {
+  return modelo.partes.map(({ geometry, material }) => {
+    const mat = material.clone()
+    mat.fog = fog
+    // NÃO mexer na transparência destes materiais. A primeira versão desligava
+    // o blend de quem tinha opacidade alta, para poupar ordenação — e opacou o
+    // plano de sombra assada do carro, que é um quad preto com a sombra
+    // desenhada no ALPHA da textura e opacidade 1 no material. O resultado foi
+    // um retângulo preto de seis metros seguindo o carro pela estrada.
+    const inst = new THREE.InstancedMesh(geometry, mat, quantidade)
+    inst.frustumCulled = false
+    inst.castShadow = false
+    inst.receiveShadow = false
+    scene.add(inst)
+    return inst
+  })
+}
+
+/* ============================================================== atlas ==== */
+
+/** Os anos, desenhados em canvas. Só texto — as fotos agora são planos. */
+async function buildYearAtlas(years) {
+  const rows = Math.max(1, Math.ceil(years.length / COLS))
   const canvas = document.createElement('canvas')
   canvas.width = COLS * CELL
   canvas.height = rows * CELL
@@ -449,36 +370,25 @@ async function buildAtlas(years, photos) {
     g.restore()
   })
 
-  await Promise.all(
-    photos.map(
-      (url, i) =>
-        new Promise((resolve) => {
-          const idx = years.length + i
-          const img = new Image()
-          img.onload = () => {
-            const cx = (idx % COLS) * CELL
-            const cy = Math.floor(idx / COLS) * CELL
-            const s = Math.max(CELL / img.width, CELL / img.height)
-            const w = img.width * s
-            const h = img.height * s
-            g.drawImage(img, cx + (CELL - w) / 2, cy + (CELL - h) / 2, w, h)
-            resolve()
-          }
-          img.onerror = resolve
-          img.src = url
-        })
-    )
-  )
-
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   return { texture, rows }
 }
 
-/**
- * Mapeia progresso de scroll (0-1) para distância percorrida, achatando a
- * curva perto de cada marco. É isto que faz a câmera desacelerar nos anos.
- */
+/** Mancha escura no chão, para as figuras não parecerem flutuando. */
+function texturaSombra() {
+  const c = document.createElement('canvas')
+  c.width = c.height = 128
+  const g = c.getContext('2d')
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64)
+  grad.addColorStop(0, 'rgba(0,0,0,0.75)')
+  grad.addColorStop(0.5, 'rgba(0,0,0,0.32)')
+  grad.addColorStop(1, 'rgba(0,0,0,0)')
+  g.fillStyle = grad
+  g.fillRect(0, 0, 128, 128)
+  return new THREE.CanvasTexture(c)
+}
+
 function makeEasing(gates) {
   return (p) => {
     let slow = 0
@@ -491,7 +401,9 @@ function makeEasing(gates) {
   }
 }
 
-export async function createRoadTimeline(canvas, entries) {
+/* ============================================================== cena ===== */
+
+export async function createRoadTimeline(canvas, entries, modelos = {}) {
   let renderer
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
@@ -499,37 +411,48 @@ export async function createRoadTimeline(canvas, entries) {
     return null
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6))
+  renderer.outputColorSpace = THREE.SRGBColorSpace
 
   const years = entries.map((e) => e.year)
-  const photos = entries.flatMap((e) => e.photos)
-  const { texture, rows } = await buildAtlas(years, photos)
+  const { texture: yearAtlas, rows } = await buildYearAtlas(years)
 
   const scene = new THREE.Scene()
-  const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 400)
+  const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 420)
   camera.position.set(0, 1.55, 4)
 
   const light = new THREE.Color()
   const fog = new THREE.Color()
 
-  // --- o céu ----------------------------------------------------------------
-  // Desenhado primeiro e sem teste de profundidade: é o fundo de tudo. Antes a
-  // estrada corria contra um vazio preto, e o que dava a leitura de "noite"
-  // era a ausência de céu, não uma escolha.
-  const skyUniformsRef = {
-    uLight: null,
-    uFog: null,
-    uTime: { value: 0 },
-    uRes: { value: new THREE.Vector2(1, 1) },
-  }
-
-  // --- a estrada ------------------------------------------------------------
   const roadUniforms = {
     uLight: { value: new THREE.Color(0.75, 0.72, 0.8) },
     uFog: { value: new THREE.Color(0.02, 0.008, 0.012) },
     uLen: { value: ROAD_LEN },
+    uNear: { value: FOG_NEAR },
+    uFar: { value: FOG_FAR },
   }
-  skyUniformsRef.uLight = roadUniforms.uLight
-  skyUniformsRef.uFog = roadUniforms.uFog
+
+  // Os modelos usam material padrão do glTF, que responde a luz e a fog do
+  // three — ao contrário de todo o resto da cena, que é shader próprio. Então
+  // a cena ganha uma névoa e duas luzes de verdade, e a cor das três é
+  // reescrita a cada quadro com a mesma cor de era que tinge os shaders. É o
+  // que mantém asfalto, céu e cidade sob a mesma iluminação.
+  scene.fog = new THREE.Fog(roadUniforms.uFog.value.clone(), FOG_NEAR, FOG_FAR)
+
+  const ceu = new THREE.HemisphereLight(0xffffff, 0x140a10, 1.15)
+  scene.add(ceu)
+  const sol = new THREE.DirectionalLight(0xffffff, 2.1)
+  // Vindo de frente e de cima: é o pôr do sol que o shader do céu desenha no
+  // fundo, e a luz da cena tem que concordar com ele.
+  sol.position.set(-0.35, 0.62, -1)
+  scene.add(sol)
+
+  // --- o céu ----------------------------------------------------------------
+  const skyUniformsRef = {
+    uLight: roadUniforms.uLight,
+    uFog: roadUniforms.uFog,
+    uTime: { value: 0 },
+    uRes: { value: new THREE.Vector2(1, 1) },
+  }
 
   const skyQuad = new THREE.PlaneGeometry(2, 2)
   const sky = new THREE.Mesh(
@@ -540,73 +463,42 @@ export async function createRoadTimeline(canvas, entries) {
       uniforms: skyUniformsRef,
       depthTest: false,
       depthWrite: false,
+      fog: false,
     })
   )
   sky.frustumCulled = false
   sky.renderOrder = -1
   scene.add(sky)
 
+  // --- a estrada ------------------------------------------------------------
   const road = new THREE.Mesh(
     new THREE.PlaneGeometry(ROAD_W, ROAD_LEN, 1, 1),
     new THREE.ShaderMaterial({
       vertexShader: ROAD_VERT,
       fragmentShader: ROAD_FRAG,
       uniforms: roadUniforms,
+      fog: false,
     })
   )
   road.rotation.x = -Math.PI / 2
   road.position.z = -ROAD_LEN / 2
   scene.add(road)
 
-  // --- a cidade -------------------------------------------------------------
-  // Silhueta urbana dos dois lados, recuando até a névoa. São caixas
-  // instanciadas com janelas desenhadas no shader — nenhuma geometria extra
-  // por janela, o que permite quase duzentos prédios numa draw call só.
-  const CITY = 190
-  const cityGeo = new THREE.InstancedBufferGeometry()
-  const box = new THREE.BoxGeometry(1, 1, 1)
-  cityGeo.index = box.index
-  cityGeo.attributes.position = box.attributes.position
-  cityGeo.attributes.normal = box.attributes.normal
-  cityGeo.attributes.uv = box.attributes.uv
-  cityGeo.instanceCount = CITY
-
-  const cPos = new Float32Array(CITY * 3)
-  const cScale = new Float32Array(CITY * 3)
-  const cSeed = new Float32Array(CITY)
-
-  for (let i = 0; i < CITY; i++) {
-    const side = i % 2 ? 1 : -1
-    // Duas fileiras por lado: a de trás mais alta e mais longe, o que dá
-    // profundidade sem precisar de mais geometria.
-    const row = Math.floor(i / 2) % 2
-    const dist = ROAD_W / 2 + 7 + row * 13 + Math.random() * 5
-    const h = (row ? 14 : 7) + Math.random() * (row ? 26 : 14)
-
-    cPos[i * 3] = side * dist
-    cPos[i * 3 + 1] = 0
-    cPos[i * 3 + 2] = -8 - (i / CITY) * (ROAD_LEN - 30) + (Math.random() - 0.5) * 12
-
-    cScale[i * 3] = 3.5 + Math.random() * 5
-    cScale[i * 3 + 1] = h
-    cScale[i * 3 + 2] = 3.5 + Math.random() * 6
-    cSeed[i] = Math.random() * 100
-  }
-
-  cityGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(cPos, 3))
-  cityGeo.setAttribute('aScale', new THREE.InstancedBufferAttribute(cScale, 3))
-  cityGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(cSeed, 1))
-
-  const city = new THREE.Mesh(
-    cityGeo,
-    new THREE.ShaderMaterial({
-      vertexShader: CITY_VERT,
-      fragmentShader: CITY_FRAG,
-      uniforms: { uLight: roadUniforms.uLight, uFog: roadUniforms.uFog },
-    })
-  )
-  city.frustumCulled = false
-  scene.add(city)
+  // Calçada dos dois lados: o asfalto terminava no vazio e os prédios ficavam
+  // plantados no nada. Uma faixa escura entre a pista e a fachada é o que faz
+  // a rua ter margem.
+  const calcadaMat = new THREE.MeshStandardMaterial({
+    color: 0x120b0e,
+    roughness: 0.95,
+    metalness: 0,
+  })
+  const calcadas = [-1, 1].map((lado) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(11, ROAD_LEN), calcadaMat)
+    m.rotation.x = -Math.PI / 2
+    m.position.set(lado * (ROAD_W / 2 + 5.5), 0.015, -ROAD_LEN / 2)
+    scene.add(m)
+    return m
+  })
 
   // --- postes ---------------------------------------------------------------
   // Só o halo, sem o mastro: a luz é o que se vê à noite, e billboards
@@ -626,7 +518,7 @@ export async function createRoadTimeline(canvas, entries) {
     gPos[i * 3] = side * (ROAD_W / 2 + 1.4)
     gPos[i * 3 + 1] = 5.2
     gPos[i * 3 + 2] = -10 - Math.floor(i / 2) * 17
-    gSize[i] = 5 + Math.random() * 2.5
+    gSize[i] = 3.2 + Math.random() * 1.6
   }
   glowGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(gPos, 3))
   glowGeo.setAttribute('aSize', new THREE.InstancedBufferAttribute(gSize, 1))
@@ -640,57 +532,41 @@ export async function createRoadTimeline(canvas, entries) {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
+      fog: false,
     })
   )
   glows.frustumCulled = false
   glows.renderOrder = 2
   scene.add(glows)
 
-  // --- tráfego --------------------------------------------------------------
-  // Carros modelados de verdade, instanciados numa malha só. As luzes
-  // continuam sendo billboards aditivos por cima: geometria não brilha, e o
-  // halo é o que faz o farol existir a distância.
-  const CARS = 14
-  const carGeo = buildCar()
-  const carMesh = new THREE.InstancedMesh(
-    carGeo,
-    new THREE.ShaderMaterial({
-      vertexShader: BODY_VERT,
-      fragmentShader: BODY_FRAG,
-      uniforms: { uLight: roadUniforms.uLight, uFog: roadUniforms.uFog },
-      vertexColors: true,
-    }),
-    CARS
-  )
-  carMesh.frustumCulled = false
-  scene.add(carMesh)
-
-  const lanes = []
-  for (let i = 0; i < CARS; i++) {
-    const oncoming = i % 2 === 0
-    lanes.push({
-      x: (oncoming ? -1 : 1) * ROAD_W * 0.24,
-      z: -(i / CARS) * ROAD_LEN,
-      speed: (9 + Math.random() * 15) * (oncoming ? 1 : -1),
-      oncoming,
-    })
-  }
-
-  // Luzes: duas por carro, na frente ou atrás conforme o sentido.
-  const LAMPS = CARS * 2
+  // --- faróis distantes -----------------------------------------------------
+  // Tráfego que nunca chega perto: pares de luz correndo ao fundo. Custa dois
+  // quads por carro em vez de 414 mil triângulos, e a distância em que eles
+  // vivem é justamente aquela em que um carro modelado seria um borrão.
+  const TRAFEGO = 16
   const carLightGeo = new THREE.InstancedBufferGeometry()
   const carQuad = new THREE.PlaneGeometry(1, 1)
   carLightGeo.index = carQuad.index
   carLightGeo.attributes.position = carQuad.attributes.position
   carLightGeo.attributes.uv = carQuad.attributes.uv
-  carLightGeo.instanceCount = LAMPS
+  carLightGeo.instanceCount = TRAFEGO * 2
 
-  const lPos = new Float32Array(LAMPS * 3)
-  const lSize = new Float32Array(LAMPS)
-  const lSeed = new Float32Array(LAMPS)
-  for (let i = 0; i < LAMPS; i++) {
-    lSize[i] = lanes[Math.floor(i / 2)].oncoming ? 1.7 : 1.15
-    lSeed[i] = lanes[Math.floor(i / 2)].oncoming ? 0.9 : 0.1
+  const lPos = new Float32Array(TRAFEGO * 2 * 3)
+  const lSize = new Float32Array(TRAFEGO * 2)
+  const lSeed = new Float32Array(TRAFEGO * 2)
+  const faixas = []
+  for (let i = 0; i < TRAFEGO; i++) {
+    const vindo = i % 2 === 0
+    faixas.push({
+      x: (vindo ? -1 : 1) * ROAD_W * 0.24,
+      z: -(i / TRAFEGO) * ROAD_LEN,
+      speed: (11 + Math.random() * 16) * (vindo ? 1 : -1),
+      vindo,
+    })
+    for (let k = 0; k < 2; k++) {
+      lSize[i * 2 + k] = vindo ? 1.5 : 1.0
+      lSeed[i * 2 + k] = vindo ? 0.9 : 0.1
+    }
   }
   carLightGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(lPos, 3))
   carLightGeo.setAttribute('aSize', new THREE.InstancedBufferAttribute(lSize, 1))
@@ -705,120 +581,235 @@ export async function createRoadTimeline(canvas, entries) {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
+      fog: false,
     })
   )
   carLights.frustumCulled = false
   carLights.renderOrder = 3
   scene.add(carLights)
 
-  const dummy = new THREE.Object3D()
   const posAttr = carLightGeo.getAttribute('aPos')
-
-  // Move o trânsito. Quatorze matrizes por frame é barato, e ter as posições
-  // na CPU é o que permite pendurar as luzes exatamente no bico de cada carro.
-  const driveCars = (t) => {
-    for (let i = 0; i < CARS; i++) {
-      const lane = lanes[i]
-      let z = lane.z + t * lane.speed
+  const moverTrafego = (t) => {
+    for (let i = 0; i < TRAFEGO; i++) {
+      const f = faixas[i]
+      let z = f.z + t * f.speed
       z = ((z % ROAD_LEN) + ROAD_LEN) % ROAD_LEN - ROAD_LEN
-      dummy.position.set(lane.x, 0, z)
-      // A frente do modelo aponta para +Z. Quem vem na direcao da camera anda
-      // para +Z e nao gira; quem se afasta e que precisa da meia volta.
-      dummy.rotation.y = lane.oncoming ? 0 : Math.PI
-      dummy.updateMatrix()
-      carMesh.setMatrixAt(i, dummy.matrix)
-
-      const nose = lane.oncoming ? z + 2.0 : z - 2.0
       for (let k = 0; k < 2; k++) {
         const j = i * 2 + k
-        posAttr.array[j * 3] = lane.x + (k ? 0.62 : -0.62)
+        posAttr.array[j * 3] = f.x + (k ? 0.6 : -0.6)
         posAttr.array[j * 3 + 1] = 0.72
-        posAttr.array[j * 3 + 2] = nose
+        posAttr.array[j * 3 + 2] = z
       }
     }
-    carMesh.instanceMatrix.needsUpdate = true
     posAttr.needsUpdate = true
   }
 
-  // --- anos e fotos ---------------------------------------------------------
-  const marks = []
-  entries.forEach((e, i) => {
-    const z = -30 - i * ((ROAD_LEN - 70) / entries.length)
-    // O ano deitado no asfalto.
-    marks.push({ cell: i, pos: [0, 0.02, z], size: [3.6, 3.6], flat: 1 })
-    // As fotos de pé nas margens, alternando os lados.
-    e.photos.forEach((_, k) => {
-      const cell = years.length + photos.indexOf(e.photos[k])
-      const side = k % 2 ? 1 : -1
-      marks.push({
-        cell,
-        // Maiores e mais perto do acostamento: na primeira calibragem elas
-        // ficavam a 1,5 unidade de largura e o rosto era ilegível a essa
-        // distância — viravam manchas na margem em vez de fotografias.
-        // Maiores, mais altas e mais perto: viradas para a estrada, elas leem
-        // como painel de rua. Antes eram pequenas demais para o rosto aparecer.
-        pos: [side * (ROAD_W / 2 + 0.6), 3.4, z + (k - 0.5) * 9],
-        size: [4.2, 5.6],
-        flat: 0,
-      })
-    })
+  // --- os anos no asfalto ---------------------------------------------------
+  const marcoZ = (i) => -30 - i * ((ROAD_LEN - 70) / entries.length)
+
+  const yearGeo = new THREE.InstancedBufferGeometry()
+  const yearQuad = new THREE.PlaneGeometry(1, 1)
+  yearGeo.index = yearQuad.index
+  yearGeo.attributes.position = yearQuad.attributes.position
+  yearGeo.attributes.uv = yearQuad.attributes.uv
+  yearGeo.instanceCount = entries.length
+
+  const yPos = new Float32Array(entries.length * 3)
+  const yCell = new Float32Array(entries.length * 2)
+  const ySize = new Float32Array(entries.length * 2)
+  entries.forEach((_, i) => {
+    yPos[i * 3] = 0
+    yPos[i * 3 + 1] = 0.02
+    yPos[i * 3 + 2] = marcoZ(i)
+    yCell[i * 2] = (i % COLS) / COLS
+    yCell[i * 2 + 1] = 1 - (Math.floor(i / COLS) + 1) / rows
+    ySize[i * 2] = 3.6
+    ySize[i * 2 + 1] = 3.6
   })
+  yearGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(yPos, 3))
+  yearGeo.setAttribute('aCell', new THREE.InstancedBufferAttribute(yCell, 2))
+  yearGeo.setAttribute('aSize', new THREE.InstancedBufferAttribute(ySize, 2))
 
-  const count = marks.length
-  const geometry = new THREE.InstancedBufferGeometry()
-  const quad = new THREE.PlaneGeometry(1, 1)
-  geometry.index = quad.index
-  geometry.attributes.position = quad.attributes.position
-  geometry.attributes.uv = quad.attributes.uv
-  geometry.instanceCount = count
-
-  const aPos = new Float32Array(count * 3)
-  const aCell = new Float32Array(count * 2)
-  const aSize = new Float32Array(count * 2)
-  const aFlat = new Float32Array(count)
-
-  marks.forEach((m, i) => {
-    aPos.set(m.pos, i * 3)
-    aCell[i * 2] = (m.cell % COLS) / COLS
-    aCell[i * 2 + 1] = 1 - (Math.floor(m.cell / COLS) + 1) / rows
-    aSize.set(m.size, i * 2)
-    aFlat[i] = m.flat
-  })
-
-  geometry.setAttribute('aPos', new THREE.InstancedBufferAttribute(aPos, 3))
-  geometry.setAttribute('aCell', new THREE.InstancedBufferAttribute(aCell, 2))
-  geometry.setAttribute('aSize', new THREE.InstancedBufferAttribute(aSize, 2))
-  geometry.setAttribute('aFlat', new THREE.InstancedBufferAttribute(aFlat, 1))
-
-  const billUniforms = {
-    uAtlas: { value: texture },
-    uCellSize: { value: new THREE.Vector2(1 / COLS, 1 / rows) },
-    uFog: roadUniforms.uFog,
-    uLight: roadUniforms.uLight,
-  }
-  const bills = new THREE.Mesh(
-    geometry,
+  const anos = new THREE.Mesh(
+    yearGeo,
     new THREE.ShaderMaterial({
-      vertexShader: BILL_VERT,
-      fragmentShader: BILL_FRAG,
-      uniforms: billUniforms,
+      vertexShader: YEAR_VERT,
+      fragmentShader: YEAR_FRAG,
+      uniforms: {
+        uAtlas: { value: yearAtlas },
+        uCellSize: { value: new THREE.Vector2(1 / COLS, 1 / rows) },
+        uFog: roadUniforms.uFog,
+        uLight: roadUniforms.uLight,
+      },
       transparent: true,
       depthWrite: false,
+      fog: false,
     })
   )
-  bills.frustumCulled = false
-  scene.add(bills)
+  anos.frustumCulled = false
+  scene.add(anos)
 
-  // Luz por era: fria no começo, dourada no meio, vinho e quase branca no fim.
-  // A sequência é a que você descreveu — a luz conta a história junto.
-  const LIGHTS = [
+  // --- as figuras do artista ------------------------------------------------
+  //
+  // Recortes de corpo inteiro, dois por era, em pé no acostamento. Ficam do
+  // MESMO lado e separados ao longo da rua, então a câmera passa pelos dois em
+  // sequência em vez de ver os dois de uma vez e nenhum direito.
+  //
+  // Eles não giram para seguir a câmera. Billboard resolveria a leitura em
+  // qualquer ângulo, mas entrega na hora que é um plano: um recorte que gira
+  // quando você passa por ele nunca esteve ali. Como a câmera só anda em linha
+  // reta pela estrada, uma rotação fixa levemente virada para a pista basta —
+  // e assim eles ficam de fato plantados no chão.
+  const sombraTex = texturaSombra()
+  const sombraMat = new THREE.MeshBasicMaterial({
+    map: sombraTex,
+    transparent: true,
+    depthWrite: false,
+    fog: true,
+  })
+  const figuras = []
+  const figLoader = new THREE.TextureLoader()
+
+  entries.forEach((e, i) => {
+    if (!e.figuras || !e.figuras.length) return
+    const lado = i % 2 === 0 ? -1 : 1
+    e.figuras.forEach((url, k) => {
+      const tex = figLoader.load(url)
+      tex.colorSpace = THREE.SRGBColorSpace
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy()
+
+      const alt = 4.1
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        // alphaTest corta o halo cinza que sobra na borda do recorte quando o
+        // alpha é interpolado. Sem ele a figura ganha um contorno claro contra
+        // o fundo escuro.
+        alphaTest: 0.35,
+        side: THREE.DoubleSide,
+        fog: true,
+      })
+      const plano = new THREE.Mesh(new THREE.PlaneGeometry(alt * 0.66, alt), mat)
+
+      // LADO A LADO, e não em fila.
+      //
+      // Na primeira montagem os dois recortes ficavam no mesmo x e separados
+      // ao longo da rua. Como a câmera anda por cima desse eixo, o que estava
+      // mais perto crescia até entrar cortado pela borda enquanto o outro
+      // ainda era um ponto ao fundo — nunca dava para ver o par. Separados no
+      // eixo TRANSVERSAL eles ficam na mesma profundidade, entram no quadro
+      // juntos e saem juntos. O de trás recua um pouco na diagonal para os
+      // dois não se encavalarem.
+      const z = marcoZ(i) + 4 - k * 1.1
+      const x = lado * (ROAD_W / 2 + 2.3 + k * 3.0)
+      plano.position.set(x, alt / 2, z)
+      plano.rotation.y = lado * 0.22 // virado de leve para a pista
+      scene.add(plano)
+
+      const sombra = new THREE.Mesh(new THREE.PlaneGeometry(alt * 0.9, alt * 0.5), sombraMat)
+      sombra.rotation.x = -Math.PI / 2
+      sombra.position.set(x, 0.03, z)
+      scene.add(sombra)
+
+      figuras.push({ plano, sombra, tex, mat })
+    })
+  })
+
+  // --- prédios e carros -----------------------------------------------------
+  //
+  // Carregados depois que a cena já está de pé. São 25 MB de modelo: esperar
+  // por eles antes de mostrar qualquer coisa deixaria a seção preta durante
+  // todo o download, e a estrada com céu e asfalto já é uma cena assistível.
+  const PREDIOS = 24
+  const CARROS = 3
+  let predioInst = []
+  let carroInst = []
+  let carroModelo = null
+  const dummy = new THREE.Object3D()
+  const carros = []
+  let descartado = false
+
+  const montarCenario = async () => {
+    const [predio, carro] = await Promise.all([
+      modelos.predio
+        ? carregarModelo(modelos.predio, { altura: 21 }).catch(() => null)
+        : Promise.resolve(null),
+      modelos.carro
+        ? carregarModelo(modelos.carro, { altura: 1.45, alinharZ: true }).catch(() => null)
+        : Promise.resolve(null),
+    ])
+    if (descartado) return
+
+    if (predio) {
+      predioInst = instanciar(predio, PREDIOS, scene, true)
+      const passo = (ROAD_LEN - 40) / (PREDIOS / 2)
+      for (let i = 0; i < PREDIOS; i++) {
+        const lado = i % 2 ? 1 : -1
+        const n = Math.floor(i / 2)
+        // Escala e recuo variados: fachada idêntica repetida vira papel de
+        // parede, e o olho pega a repetição antes de pegar a cidade.
+        const s = 0.78 + ((n * 37) % 11) / 22
+        const recuo = ROAD_W / 2 + 17 + ((n * 53) % 7) * 0.9
+        dummy.position.set(lado * recuo, 0, -26 - n * passo + (lado > 0 ? passo * 0.45 : 0))
+        dummy.rotation.set(0, lado > 0 ? -Math.PI / 2 : Math.PI / 2, 0)
+        dummy.scale.setScalar(s)
+        dummy.updateMatrix()
+        predioInst.forEach((inst) => inst.setMatrixAt(i, dummy.matrix))
+      }
+      predioInst.forEach((inst) => (inst.instanceMatrix.needsUpdate = true))
+    }
+
+    if (carro) {
+      carroModelo = carro
+      carroInst = instanciar(carro, CARROS, scene, true)
+      // Um carro acompanha a câmera na faixa da direita — é a tomada de
+      // carro-câmera, e a única forma de um modelo com 414 mil triângulos
+      // aparecer grande na tela o tempo todo sem multiplicar o custo. Os
+      // outros dois ficam estacionados e são reposicionados à frente conforme
+      // a câmera avança, então três carros dão a impressão de uma rua cheia.
+      carros.push({ tipo: 'segue', x: ROAD_W * 0.26, dz: -7.5, giro: Math.PI })
+      carros.push({ tipo: 'parado', x: -(ROAD_W / 2 + 2.2), passo: 96, fase: 0, giro: 0 })
+      carros.push({ tipo: 'parado', x: ROAD_W / 2 + 2.2, passo: 96, fase: 48, giro: Math.PI })
+    }
+  }
+
+  const posicionarCarros = (t) => {
+    if (!carroInst.length) return
+    const camZ = camera.position.z
+    carros.forEach((c, i) => {
+      if (c.tipo === 'segue') {
+        // Deriva lenta no eixo da rua: um carro que mantém distância exata é
+        // um objeto colado na câmera, não um carro.
+        dummy.position.set(c.x + Math.sin(t * 0.31) * 0.3, 0, camZ + c.dz + Math.sin(t * 0.44) * 1.6)
+        dummy.rotation.set(0, c.giro, 0)
+      } else {
+        // Reciclagem: o carro fica sempre no múltiplo do passo mais próximo à
+        // frente da câmera, então nunca é visto aparecendo do nada.
+        const alvo = camZ - 34 - c.fase
+        const z = Math.round(alvo / c.passo) * c.passo
+        dummy.position.set(c.x, 0, z)
+        dummy.rotation.set(0, c.giro, 0)
+      }
+      dummy.scale.setScalar(1)
+      dummy.updateMatrix()
+      carroInst.forEach((inst) => inst.setMatrixAt(i, dummy.matrix))
+    })
+    carroInst.forEach((inst) => (inst.instanceMatrix.needsUpdate = true))
+  }
+
+  montarCenario()
+
+  // --- luz por era ----------------------------------------------------------
+  // Fria no começo, dourada no meio, vinho e quase branca no fim: a luz conta
+  // a história junto com os textos.
+  const LUZES = [
     new THREE.Color('#7d8fa8'),
     new THREE.Color('#c9964a'),
     new THREE.Color('#9a2135'),
     new THREE.Color('#c41e3a'),
     new THREE.Color('#e8ded0'),
   ]
-  const FOGS = [
+  const NEVOAS = [
     new THREE.Color('#05070c'),
     new THREE.Color('#0c0703'),
     new THREE.Color('#0d0306'),
@@ -833,14 +824,10 @@ export async function createRoadTimeline(canvas, entries) {
     const w = canvas.clientWidth || window.innerWidth
     const h = canvas.clientHeight || window.innerHeight
     renderer.setSize(w, h, false)
+    skyUniformsRef.uRes.value.set(w, h)
     camera.aspect = w / h
     camera.updateProjectionMatrix()
   }
-
-  // A cena deixa de ser puramente scrubada: tráfego e janelas correm no tempo
-  // mesmo com o scroll parado. Só roda enquanto a seção está visível.
-  const cityUniforms = { uTime: { value: 0 } }
-  city.material.uniforms.uTime = cityUniforms.uTime
 
   let raf = 0
   let running = false
@@ -854,9 +841,9 @@ export async function createRoadTimeline(canvas, entries) {
     const dt = Math.min((now - last) / 1000, 0.05)
     last = now
     clock += dt
-    cityUniforms.uTime.value = clock
     skyUniformsRef.uTime.value = clock
-    driveCars(clock)
+    moverTrafego(clock)
+    posicionarCarros(clock)
     render()
   }
 
@@ -872,10 +859,11 @@ export async function createRoadTimeline(canvas, entries) {
   }
   for (let i = 0; i <= STEPS; i++) table[i] /= acc
 
-  window.addEventListener('resize', () => {
+  const onResize = () => {
     resize()
     render()
-  })
+  }
+  window.addEventListener('resize', onResize)
   resize()
 
   return {
@@ -900,40 +888,77 @@ export async function createRoadTimeline(canvas, entries) {
       camera.rotation.y = Math.sin(t * 9.2 + 1.2) * 0.012
 
       // Interpola a luz entre as eras vizinhas.
-      const f = t * (LIGHTS.length - 1)
-      const i0 = Math.min(LIGHTS.length - 1, Math.floor(f))
-      const i1 = Math.min(LIGHTS.length - 1, i0 + 1)
+      const f = t * (LUZES.length - 1)
+      const i0 = Math.min(LUZES.length - 1, Math.floor(f))
+      const i1 = Math.min(LUZES.length - 1, i0 + 1)
       const k = f - i0
-      light.copy(LIGHTS[i0]).lerp(LIGHTS[i1], k)
-      fog.copy(FOGS[i0]).lerp(FOGS[i1], k)
+      light.copy(LUZES[i0]).lerp(LUZES[i1], k)
+      fog.copy(NEVOAS[i0]).lerp(NEVOAS[i1], k)
       roadUniforms.uLight.value.copy(light)
       roadUniforms.uFog.value.copy(fog)
+
+      // Os modelos não leem os uniforms dos shaders próprios; para eles a era
+      // chega pela luz direcional e pela névoa da cena.
+      scene.fog.color.copy(fog)
+      sol.color.copy(light).lerp(new THREE.Color(1, 1, 1), 0.45)
+      ceu.color.copy(light).lerp(new THREE.Color(1, 1, 1), 0.25)
       renderer.setClearColor(fog, 1)
 
+      posicionarCarros(clock)
       render()
       return { light: `#${light.getHexString()}`, index: i0 }
     },
     dispose() {
+      descartado = true
       cancelAnimationFrame(raf)
-      window.removeEventListener('resize', resize)
+      window.removeEventListener('resize', onResize)
+
+      const limpar = (lista) =>
+        lista.forEach((inst) => {
+          scene.remove(inst)
+          inst.geometry.dispose()
+          inst.material.dispose()
+          inst.dispose()
+        })
+      limpar(predioInst)
+      limpar(carroInst)
+      // As geometrias fundidas são compartilhadas pelas instâncias, então já
+      // saíram acima; sobram os materiais originais do glTF.
+      carroModelo?.partes.forEach((p) => p.material.dispose())
+
+      figuras.forEach(({ plano, sombra, tex, mat }) => {
+        scene.remove(plano)
+        scene.remove(sombra)
+        plano.geometry.dispose()
+        sombra.geometry.dispose()
+        mat.dispose()
+        tex.dispose()
+      })
+      sombraMat.dispose()
+      sombraTex.dispose()
+      calcadas.forEach((m) => {
+        scene.remove(m)
+        m.geometry.dispose()
+      })
+      calcadaMat.dispose()
+
       carQuad.dispose()
-      carGeo.dispose()
       carLightGeo.dispose()
-      carMesh.material.dispose()
       carLights.material.dispose()
-      quad.dispose()
-      box.dispose()
+      yearQuad.dispose()
+      yearGeo.dispose()
+      anos.material.dispose()
       glowQuad.dispose()
-      cityGeo.dispose()
-      city.material.dispose()
       glowGeo.dispose()
       glows.material.dispose()
-      geometry.dispose()
+      skyQuad.dispose()
+      sky.material.dispose()
       road.geometry.dispose()
       road.material.dispose()
-      bills.material.dispose()
-      texture.dispose()
+      yearAtlas.dispose()
       renderer.dispose()
     },
+    // Exposto para medição: quantos triângulos a cena realmente desenha.
+    info: () => renderer.info.render,
   }
 }

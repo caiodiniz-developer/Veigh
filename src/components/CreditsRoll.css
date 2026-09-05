@@ -1,0 +1,99 @@
+.evom-credits {
+  --evom-ruby: #c41e3a;
+  --evom-bone: #f5efe6;
+
+  position: relative;
+  width: 100%;
+  background: #050203;
+  color: var(--evom-bone);
+}
+
+.evom-credits__stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* A coluna. Estreita e centrada: crédito de filme é uma faixa no meio da
+   tela, não um layout de página. */
+.evom-credits__roll {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: min(88vw, 560px);
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(40px, 8vh, 90px);
+  text-align: center;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  will-change: transform;
+}
+
+.evom-credits__mark {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  color: rgba(245, 239, 230, 0.42);
+}
+
+.evom-credits__album {
+  margin: -20px 0 0;
+  font-size: clamp(2rem, 7vw, 4rem);
+  font-weight: 500;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+}
+
+.evom-credits__block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.evom-credits__role {
+  margin: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--evom-ruby);
+}
+
+.evom-credits__names {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: clamp(0.92rem, 1.6vw, 1.15rem);
+  color: rgba(245, 239, 230, 0.86);
+}
+
+.evom-credits__end {
+  margin: 0;
+  padding-bottom: 12vh;
+  font-size: clamp(1rem, 2.4vw, 1.5rem);
+  font-style: italic;
+  color: rgba(245, 239, 230, 0.5);
+}
+
+/* Bordas devoradas pelo preto: os nomes nascem e morrem no escuro. */
+.evom-credits__vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    #050203 0%,
+    rgba(5, 2, 3, 0) 22%,
+    rgba(5, 2, 3, 0) 78%,
+    #050203 100%
+  );
+}

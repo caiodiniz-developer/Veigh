@@ -151,3 +151,53 @@ interação visual.
 - lazy-load — só a faixa ativa e as vizinhas baixam
 - botão "Ativar som" quando a política de autoplay do navegador exigir um
   gesto antes do primeiro áudio
+
+---
+
+## Trajetória — o cenário 3D (`public/trajetoria/`)
+
+A seção da trajetória deixou de ser procedural. Prédios e carro são modelos
+reais, e nas margens ficam recortes do artista em corpo inteiro, dois por era.
+
+### O que está lá
+
+| arquivo | uso |
+| --- | --- |
+| `predio.glb` | 24 instâncias formando os dois lados da rua |
+| `carro.glb` | 3 instâncias: uma acompanha a câmera, duas ficam estacionadas |
+| `veigh-<era>-1.png` / `-2.png` | recortes com alpha, o par de cada era (fonte) |
+| `veigh-<era>-1.webp` / `-2.webp` | o que o site carrega de fato |
+
+Eras, na ordem da estrada: `dos-predios`, `novo-balanco`, `dos-predios-delux`,
+`evom`. O quinto marco ("AGORA") não tem par — não é um disco.
+
+### Dois passos obrigatórios ao trocar um asset
+
+**1. Recorte novo → gerar o webp.**
+
+```
+node scripts/otimizar-figuras.mjs
+```
+
+Os oito PNG somam 11 MB; os webp somam 0,6 MB com o mesmo alpha. O site lê os
+`.webp`; os `.png` ficam só como fonte.
+
+**2. Modelo novo do Sketchfab → checar a extensão de material.**
+
+```
+node scripts/glb-specgloss-to-mr.mjs public/trajetoria/<arquivo>.glb
+```
+
+Rode isto se o modelo usar `KHR_materials_pbrSpecularGlossiness`. O three 0.185
+removeu o suporte a essa extensão: ele não quebra, só imprime "Unknown
+extension" e carrega o modelo **branco liso, sem nenhuma textura**. O script
+converte para metallic-roughness e, de quebra, repinta a lataria de vinho.
+
+### Custo
+
+A cena desenha ~2,57 milhões de triângulos por quadro em 59 draw calls (o
+`carro.glb` sozinho tem 414 mil triângulos). As draw calls estão baixas porque
+as malhas que dividem material são fundidas no carregamento — sem isso seriam
+cerca de 450. O número de triângulos é alto para GPU integrada: se travar na
+sua máquina, os controles são `PREDIOS` e `CARROS` no topo de
+`src/components/roadTimeline.js`.

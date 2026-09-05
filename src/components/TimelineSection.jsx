@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { CAPAS, ERA } from '../assets.js'
+import { CAPAS, TRAJETORIA } from '../assets.js'
 import { readMotionMode, CALM } from '../motion.js'
 import { createRoadTimeline } from './roadTimeline.js'
 import './TimelineSection.css'
@@ -28,14 +28,14 @@ const ENTRIES = [
     title: 'DOS PRÉDIOS',
     text: 'Os prédios onde cresceu em Itapevi viram o nome do primeiro álbum. O disco de trap nacional mais ouvido do Brasil.',
     cover: CAPAS.dosPredios,
-    photos: [ERA.dosPredios[0], ERA.dosPredios[3]],
+    figuras: TRAJETORIA.dosPredios,
   },
   {
     year: '2023',
     title: 'NOVO BALANÇO',
     text: 'O nome sai dos prédios. As colaborações começam a atravessar o cenário.',
     cover: CAPAS.novoBalanco,
-    photos: [ERA.dosPredios[5], ERA.dosPrediosDeluxe[0]],
+    figuras: TRAJETORIA.novoBalanco,
   },
   {
     // Ano ainda pendente: o briefing não informou a data do Deluxe.
@@ -43,20 +43,24 @@ const ENTRIES = [
     title: 'DOS PRÉDIOS DELUXE',
     text: 'O prédio ficou pequeno. A fotografia deixa de ser rua e começa a ser ascensão.',
     cover: CAPAS.dosPrediosDeluxe,
-    photos: [ERA.dosPrediosDeluxe[1], ERA.dosPrediosDeluxe[3]],
+    figuras: TRAJETORIA.dosPrediosDeluxe,
   },
   {
     year: '2025',
     title: 'EU VENCI O MUNDO',
     text: 'O capítulo em que a frase deixa de ser ambição e vira título.',
     cover: CAPAS.euVenciOMundo,
-    photos: [ERA.euVenciOMundo[0], ERA.euVenciOMundo[2]],
+    figuras: TRAJETORIA.euVenciOMundo,
   },
   {
+    // Sem figura: existem quatro pares de recorte, um por disco, e "AGORA" não
+    // é um disco. Repetir o par do EVOM logo depois dele mesmo entregaria a
+    // repetição na hora — o trecho final é a estrada se abrindo, com a cidade
+    // ficando para trás.
     year: 'AGORA',
     title: '5 BILHÕES DE STREAMS',
     text: 'Capa da Forbes Under 30.',
-    photos: [ERA.euVenciOMundo[3], ERA.euVenciOMundo[4]],
+    figuras: null,
   },
 ]
 
@@ -75,9 +79,16 @@ export default function TimelineSection({ height = '620vh', respectReducedMotion
     let cancelled = false
     let st = null
 
-    createRoadTimeline(canvasRef.current, ENTRIES).then((scene) => {
+    createRoadTimeline(canvasRef.current, ENTRIES, {
+      predio: TRAJETORIA.predio,
+      carro: TRAJETORIA.carro,
+    }).then((scene) => {
       if (cancelled || !scene) return
       road = scene
+      // Sonda de custo em desenvolvimento. A cena carrega dois modelos pesados
+      // (o carro tem 414 mil triângulos), e a única forma honesta de saber o
+      // que ela desenha por quadro é perguntar ao renderer em vez de estimar.
+      if (import.meta.env.DEV) window.__evomRoad = scene
 
       st = ScrollTrigger.create({
         trigger: root,

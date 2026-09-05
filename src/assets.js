@@ -45,6 +45,32 @@ export const ERA = {
   euVenciOMundo: range(5, (i) => `/era/eu-venci-o-mundo-${i + 1}.jpg`),
 }
 
+/**
+ * A trajetória: o cenário 3D e os recortes do artista.
+ *
+ * Os .glb são modelos reais (Sketchfab), não geometria gerada por código. Os
+ * recortes vêm em PNG RGBA como fonte e em .webp para o runtime — o PNG dos
+ * oito somava 11 MB, o webp soma 0,6 MB com o mesmo alpha. Regerar:
+ * node scripts/otimizar-figuras.mjs
+ *
+ * O carro.glb foi convertido de KHR_materials_pbrSpecularGlossiness para
+ * metallic-roughness porque o three 0.185 não lê mais aquela extensão:
+ * node scripts/glb-specgloss-to-mr.mjs public/trajetoria/carro.glb
+ */
+const figura = (nome) => [
+  `/trajetoria/veigh-${nome}-1.webp`,
+  `/trajetoria/veigh-${nome}-2.webp`,
+]
+
+export const TRAJETORIA = {
+  carro: '/trajetoria/carro.glb',
+  predio: '/trajetoria/predio.glb',
+  dosPredios: figura('dos-predios'),
+  novoBalanco: figura('novo-balanco'),
+  dosPrediosDeluxe: figura('dos-predios-delux'),
+  euVenciOMundo: figura('evom'),
+}
+
 export const SHOWS = range(6, (i) => `/shows/show-${i}.jpg`)
 
 /** Vídeos de clipe. Duram de 38s a 69s — não são previews curtos. */
@@ -81,6 +107,12 @@ export const ALL_ASSETS = [
   ...ERA.euVenciOMundo,
   ...SHOWS,
   ...CLIPES,
+  TRAJETORIA.carro,
+  TRAJETORIA.predio,
+  ...TRAJETORIA.dosPredios,
+  ...TRAJETORIA.novoBalanco,
+  ...TRAJETORIA.dosPrediosDeluxe,
+  ...TRAJETORIA.euVenciOMundo,
 ]
 
 /**

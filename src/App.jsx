@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import CursorLayer from './components/CursorLayer.jsx'
+import CoverCompanion from './components/CoverCompanion.jsx'
 import GrainLayer from './components/GrainLayer.jsx'
 import CinemaLayer from './components/CinemaLayer.jsx'
 import AtmosphereLayer from './components/AtmosphereLayer.jsx'
@@ -17,6 +18,7 @@ import ClipsSection from './components/ClipsSection.jsx'
 import ShowsSection from './components/ShowsSection.jsx'
 import WorldSection from './components/WorldSection.jsx'
 import FinaleSection from './components/FinaleSection.jsx'
+import CreditsRoll from './components/CreditsRoll.jsx'
 import SiteFooter from './components/SiteFooter.jsx'
 
 export default function App() {
@@ -30,6 +32,8 @@ export default function App() {
       <AtmosphereLayer />
       <CinemaLayer />
       <CursorLayer />
+      {/* A capa entra quando o disco explode e sai no encerramento. */}
+      <CoverCompanion />
 
       <IntroSequence onIntroComplete={() => setIntroSeen(true)} />
 
@@ -83,8 +87,12 @@ export default function App() {
         {/* Pausa final: o respiro antes do encerramento. */}
         <Interlude text="Dos prédios até aqui." />
 
-        {/* Encerramento e rodape. */}
+        {/* Encerramento. */}
         <FinaleSection />
+
+        {/* Creditos subindo, como no fim de um filme. */}
+        <CreditsRoll />
+
         <SiteFooter />
       </main>
     </>
