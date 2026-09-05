@@ -23,6 +23,9 @@ export const VIDEOS = {
   sessao1Poster: '/videos/sessao1-poster.jpg',
 }
 
+/** Recorte do artista em corpo inteiro, com alpha. Usado no palco. */
+export const VEIGH_CUTOUT = '/veigh-sem-fundo.png'
+
 /** Os 4 pingentes de joia que formam EVOM na intro. */
 export const PENDANTS = ['/logos/e.png', '/logos/v.png', '/logos/o.png', '/logos/m.png']
 
@@ -70,6 +73,7 @@ export const TRACKLIST = [
 /** Todo asset referenciado pelo site, para a checagem de integridade. */
 export const ALL_ASSETS = [
   ...Object.values(VIDEOS),
+  VEIGH_CUTOUT,
   ...PENDANTS,
   ...Object.values(CAPAS),
   ...ERA.dosPredios,

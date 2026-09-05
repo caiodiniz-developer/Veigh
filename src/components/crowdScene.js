@@ -1,22 +1,21 @@
 import * as THREE from 'three'
 
 /**
- * A plateia, vista do palco.
+ * A plateia, agora vista DE DENTRO dela.
  *
- * Esta é a única cena do site em que o usuário está do lado de dentro. Todas
- * as outras o colocam olhando para alguma coisa; aqui ele está onde o artista
- * está, e o que se vê é a multidão de volta.
+ * A câmera estava no palco olhando para a multidão. Para o artista aparecer em
+ * cima do palco, ela precisa estar do outro lado — no meio do público, olhando
+ * para a frente. As luzes de celular deixam de ser o assunto e viram primeiro
+ * plano: grandes, desfocadas e recortadas pela borda de baixo, como numa foto
+ * feita do meio da pista.
  *
- * Milhares de luzes de celular em pontos instanciados, balançando fora de
- * sincronia. Fora de sincronia é o ponto: multidão em uníssono lê como
- * animação, multidão em fases diferentes lê como gente. Cada luz tem a sua
- * fase, a sua amplitude e o seu período.
+ * Fora de sincronia continua sendo o ponto: cada luz tem fase, amplitude e
+ * período próprios. Multidão em uníssono lê como animação; em fases
+ * diferentes, lê como gente.
  *
- * A profundidade faz o trabalho pesado — perto as luzes são grandes, nítidas e
- * separadas; longe viram um cintilar contínuo. É a mesma coisa que faz uma
- * foto de show parecer uma foto de show.
- *
- * As fotografias ficam atrás da multidão, grandes, como telão.
+ * O palco em si não é WebGL — é DOM, atrás deste canvas. Separar as camadas é
+ * o que permite a fotografia dele ficar nítida e recortada enquanto a plateia
+ * na frente fica fora de foco.
  */
 
 const LIGHTS = 2600
@@ -55,7 +54,7 @@ const CROWD_VERT = /* glsl */ `
     // a plateia levanta o celular aos poucos, como acontece de verdade.
     float turn = smoothstep(aSeed * 0.85, aSeed * 0.85 + 0.2, uReveal);
     // As de trás somem na fumaça.
-    vFade = turn * (1.0 - smoothstep(26.0, 58.0, dist));
+    vFade = turn * (1.0 - smoothstep(13.0, 26.0, dist));
     vSeed = aSeed;
   }
 `
@@ -81,72 +80,7 @@ const CROWD_FRAG = /* glsl */ `
   }
 `
 
-const PANEL_VERT = /* glsl */ `
-  attribute vec3 aPos;
-  attribute vec2 aCell;
-  attribute vec2 aSize;
-  uniform vec2 uCellSize;
-  varying vec2 vUv;
-  void main() {
-    vec4 mv = modelViewMatrix * vec4(aPos, 1.0);
-    mv.xy += position.xy * aSize;
-    gl_Position = projectionMatrix * mv;
-    vUv = aCell + uv * uCellSize;
-  }
-`
-
-const PANEL_FRAG = /* glsl */ `
-  precision highp float;
-  uniform sampler2D uAtlas;
-  uniform float uReveal;
-  varying vec2 vUv;
-  void main() {
-    vec4 c = texture2D(uAtlas, vUv);
-    // O telão entra antes da plateia acender: primeiro a imagem, depois as
-    // luzes subindo na frente dela.
-    float show = smoothstep(0.0, 0.34, uReveal);
-    gl_FragColor = vec4(c.rgb * (0.35 + show * 0.65), show);
-  }
-`
-
-const COLS = 3
-const CELL = 512
-
-async function buildAtlas(urls) {
-  const rows = Math.ceil(urls.length / COLS)
-  const canvas = document.createElement('canvas')
-  canvas.width = COLS * CELL
-  canvas.height = rows * CELL
-  const g = canvas.getContext('2d')
-  g.fillStyle = '#0a0305'
-  g.fillRect(0, 0, canvas.width, canvas.height)
-
-  await Promise.all(
-    urls.map(
-      (url, i) =>
-        new Promise((resolve) => {
-          const img = new Image()
-          img.onload = () => {
-            const cx = (i % COLS) * CELL
-            const cy = Math.floor(i / COLS) * CELL
-            const s = Math.max(CELL / img.width, CELL / img.height)
-            const w = img.width * s
-            const h = img.height * s
-            g.drawImage(img, cx + (CELL - w) / 2, cy + (CELL - h) / 2, w, h)
-            resolve()
-          }
-          img.onerror = resolve
-          img.src = url
-        })
-    )
-  )
-
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  return { texture, rows }
-}
-
-export async function createCrowd(canvas, photoUrls) {
+export async function createCrowd(canvas) {
   let renderer
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true })
@@ -156,19 +90,16 @@ export async function createCrowd(canvas, photoUrls) {
   const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
   renderer.setPixelRatio(dpr)
 
-  const { texture, rows } = await buildAtlas(photoUrls)
-
   const scene = new THREE.Scene()
   const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 200)
-  // A câmera fica alta e olhando de leve para baixo: é a altura de quem está
-  // no palco olhando a plateia, não a de quem está no meio dela.
-  // Perto e um pouco acima da primeira fila, olhando de leve para baixo.
-  // Na primeira calibragem a câmera estava a 6 unidades e o campo ia até -54:
-  // a plateia inteira cabia numa faixa fina no meio da tela, porque a extensão
-  // vertical de uma multidão na tela vem da PERSPECTIVA, e a perspectiva só
-  // abre quando as primeiras fileiras estão realmente perto.
-  camera.position.set(0, 2.1, 1.2)
-  camera.rotation.x = -0.11
+  // No meio do público, na altura de quem está de pé, olhando levemente para
+  // cima em direção ao palco. Olhar para cima é o que empurra a multidão para
+  // a faixa de baixo do quadro e abre o topo para o palco.
+  camera.position.set(0, 1.62, 0)
+  // Mais inclinada para cima: a 0.07 a multidão subia até o meio do quadro e
+  // cobria o tampo do palco. Olhar mais para cima empurra o público para a
+  // faixa de baixo e libera o palco inteiro.
+  camera.rotation.x = 0.13
 
   // ---- a multidão ---------------------------------------------------------
   const geo = new THREE.BufferGeometry()
@@ -180,19 +111,21 @@ export async function createCrowd(canvas, photoUrls) {
   for (let i = 0; i < LIGHTS; i++) {
     // Distribuição em cunha: estreita perto do palco e abrindo ao fundo, que é
     // o formato real de uma plateia vista de cima do palco.
-    // Expoente baixo concentra gente perto da câmera, que é onde a
-    // perspectiva trabalha. Distribuição uniforme joga quase tudo no fundo.
-    const depth = Math.pow(Math.random(), 0.5)
-    const z = -0.6 - depth * 46
-    const spread = 9 + depth * 46
+    // Tudo perto: a plateia agora é primeiro plano, não paisagem. O campo
+    // curto é o que deixa as luzes grandes e desfocadas na borda de baixo.
+    const depth = Math.pow(Math.random(), 0.62)
+    const z = -0.4 - depth * 22
+    const spread = 7 + depth * 30
 
     pos[i * 3] = (Math.random() - 0.5) * spread
-    // Alturas bem variadas: braço esticado, celular no peito, ombro de quem
-    // está atrás. É a variação que impede a fileira de virar uma linha.
-    pos[i * 3 + 1] = 0.25 + Math.random() * 2.3 - depth * 0.35
+    // Abaixo da linha dos olhos: celular erguido chega no máximo à altura da
+    // cabeça de quem segura, e é isso que mantém o topo do quadro livre.
+    // Teto mais baixo pelo mesmo motivo: braço erguido não passa da cabeça,
+    // e o que passava estava invadindo o praticável.
+    pos[i * 3 + 1] = 0.05 + Math.random() * 1.05 - depth * 0.12
     pos[i * 3 + 2] = z
 
-    size[i] = 150 + Math.random() * 230
+    size[i] = 130 + Math.random() * 210
     seed[i] = Math.random()
     phase[i] = Math.random() * Math.PI * 2
   }
@@ -223,54 +156,9 @@ export async function createCrowd(canvas, photoUrls) {
   crowd.frustumCulled = false
   scene.add(crowd)
 
-  // ---- o telão ------------------------------------------------------------
-  const panelGeo = new THREE.InstancedBufferGeometry()
-  const quad = new THREE.PlaneGeometry(1, 1)
-  panelGeo.index = quad.index
-  panelGeo.attributes.position = quad.attributes.position
-  panelGeo.attributes.uv = quad.attributes.uv
-  panelGeo.instanceCount = photoUrls.length
-
-  const pPos = new Float32Array(photoUrls.length * 3)
-  const pCell = new Float32Array(photoUrls.length * 2)
-  const pSize = new Float32Array(photoUrls.length * 2)
-
-  for (let i = 0; i < photoUrls.length; i++) {
-    // Telão de verdade: painéis grandes, altos e alinhados atrás da multidão.
-    // A 54 unidades e com 10 de altura eles ocupavam 15% da tela e liam como
-    // miniaturas — a foto de show precisa dominar o fundo.
-    const spanX = ((i - (photoUrls.length - 1) / 2) / (photoUrls.length - 1)) * 44
-    pPos[i * 3] = spanX
-    pPos[i * 3 + 1] = 9.5
-    pPos[i * 3 + 2] = -40
-    pCell[i * 2] = (i % COLS) / COLS
-    pCell[i * 2 + 1] = 1 - (Math.floor(i / COLS) + 1) / rows
-    pSize[i * 2] = 13
-    pSize[i * 2 + 1] = 17
-  }
-
-  panelGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(pPos, 3))
-  panelGeo.setAttribute('aCell', new THREE.InstancedBufferAttribute(pCell, 2))
-  panelGeo.setAttribute('aSize', new THREE.InstancedBufferAttribute(pSize, 2))
-
-  const panelUniforms = {
-    uAtlas: { value: texture },
-    uCellSize: { value: new THREE.Vector2(1 / COLS, 1 / rows) },
-    uReveal: { value: 0 },
-  }
-
-  const panels = new THREE.Mesh(
-    panelGeo,
-    new THREE.ShaderMaterial({
-      vertexShader: PANEL_VERT,
-      fragmentShader: PANEL_FRAG,
-      uniforms: panelUniforms,
-      transparent: true,
-      depthWrite: false,
-    })
-  )
-  panels.frustumCulled = false
-  scene.add(panels)
+  // O telão saiu. Quem ocupa o fundo agora é o palco, montado em DOM atrás
+  // deste canvas — as fotografias de show voltaram para lá, como painéis de
+  // fundo de palco, onde ficam nítidas em vez de recortadas por um atlas.
 
   const resize = () => {
     const w = canvas.clientWidth || window.innerWidth
@@ -313,20 +201,16 @@ export async function createCrowd(canvas, photoUrls) {
     setProgress(p) {
       const t = Math.min(Math.max(p, 0), 1)
       crowdUniforms.uReveal.value = t
-      panelUniforms.uReveal.value = t
       // A câmera avança de leve para dentro da plateia.
-      camera.position.z = 1.2 - t * 2.2
+      camera.position.z = 0.4 - t * 1.1
       if (!running) renderer.render(scene, camera)
     },
     dispose() {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
-      quad.dispose()
+
       geo.dispose()
-      panelGeo.dispose()
       crowd.material.dispose()
-      panels.material.dispose()
-      texture.dispose()
       renderer.dispose()
     },
   }

@@ -22,3 +22,44 @@
   font-size: 0.7rem;
   letter-spacing: 0.16em;
 }
+
+/* ------------------------------------------------------------- crédito */
+
+.evom-footer__by {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: rgba(245, 239, 230, 0.42);
+}
+
+.evom-footer__heart {
+  width: 13px;
+  height: 13px;
+  color: #6e1423;
+  /* Batida lenta: coração parado num crédito é ícone, batendo é assinatura. */
+  animation: evom-beat 2.4s ease-in-out infinite;
+}
+
+@keyframes evom-beat {
+  0%, 72%, 100% { transform: scale(1); }
+  78% { transform: scale(1.22); }
+  84% { transform: scale(1.04); }
+  90% { transform: scale(1.14); }
+}
+
+.evom-footer__by a {
+  color: rgba(245, 239, 230, 0.78);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(196, 30, 58, 0.5);
+  padding-bottom: 1px;
+  transition: color 200ms ease, border-color 200ms ease;
+}
+
+.evom-footer__by a:hover,
+.evom-footer__by a:focus-visible {
+  color: #fff8ec;
+  border-color: #c41e3a;
+}
