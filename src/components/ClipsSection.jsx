@@ -7,17 +7,35 @@ import './ClipsSection.css'
 gsap.registerPlugin(ScrollTrigger)
 
 /**
- * Clipes — a sala de projeção do site.
+ * Clipes — a sala de projeção.
  *
- * Cards de vidro numa fita horizontal; clicar em um abre o vídeo em tela cheia
- * partindo da posição exata do card (FLIP manual), com o fundo escurecendo e
- * desfocando. Fecha no ESC, no clique fora e no botão.
+ * A versão anterior era uma fita horizontal de seis cards de vidro. Estava bem
+ * acabada e estava errada de premissa: seis vídeos lado a lado significam seis
+ * vídeos pequenos, e "sala de projeção" com seis telas ao mesmo tempo é uma
+ * loja de televisores. Uma sala de projeção tem UMA tela.
+ *
+ * Então agora tem uma. O clipe corrente ocupa o telão no meio do palco; os
+ * outros cinco esperam embaixo como quadros de película numa bancada de
+ * montagem. O scroll troca a bobina — é ele que passa de um clipe para o
+ * outro, e a troca acontece com um corte branco, que é o que uma emenda de
+ * película faz ao passar pelo projetor.
+ *
+ * O que faz a tela parecer projetada, e não um <video> numa caixa:
+ *
+ *   FEIXE     o cone de luz sai de trás de quem olha e abre até a tela, com
+ *             poeira dentro dele — projeção é a luz atravessando o ar
+ *   TREMOR    o quadro oscila alguns décimos de pixel (gate weave): película
+ *             nunca fica perfeitamente registrada no projetor
+ *   CINTILA   a luminosidade varia de leve, no ritmo do obturador
+ *   GRÃO      ruído por cima de tudo, que é o que une o vídeo digital ao resto
+ *
+ * Clicar na tela abre o clipe com som, em tela cheia. O player é o mesmo de
+ * antes: ele estava certo, era só o caminho até ele que estava errado.
  *
  * Sobre os metadados: os seis arquivos chegaram como "video curto 1..6", sem
  * título, data ou contagem de views. Duração eu leio do próprio arquivo — esse
- * dado é real. Título, ano, tipo e views ficam como campos opcionais aqui:
- * o card só desenha o que existe, então nada aparece inventado. Preencha
- * abaixo e a interface passa a mostrar sozinha.
+ * dado é real. Título, ano, tipo e views ficam como campos opcionais: a
+ * interface só desenha o que existe, então nada aparece inventado.
  */
 const CLIPS = CLIPES.map((src, i) => ({
   src,
@@ -38,17 +56,20 @@ const fmt = (s) => {
   return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 }
 
-export default function ClipsSection() {
+export default function ClipsSection({ height = '520vh' }) {
   const rootRef = useRef(null)
-  const tapeRef = useRef(null)
-  const cardRefs = useRef([])
-  const previewRefs = useRef([])
+  const screenRef = useRef(null)
+  const reelRef = useRef(null)
+  const flashRef = useRef(null)
+  const stripRefs = useRef([])
+  const stageVideoRef = useRef(null)
 
   const modalRef = useRef(null)
   const frameRef = useRef(null)
   const videoRef = useRef(null)
   const openerRef = useRef(null) // para devolver o foco ao fechar
 
+  const [reel, setReel] = useState(0) // o clipe no telão
   const [open, setOpen] = useState(null)
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
@@ -56,25 +77,24 @@ export default function ClipsSection() {
   const [muted, setMuted] = useState(false)
   const [durations, setDurations] = useState({})
 
-  // ------------------------------------------------------------ fita horizontal
+  /* --------------------------------------------------- o scroll troca a bobina */
   useEffect(() => {
     const root = rootRef.current
-    const tape = tapeRef.current
-    if (!root || !tape) return
+    if (!root) return
 
     const ctx = gsap.context(() => {
-      const distance = () => Math.max(0, tape.scrollWidth - window.innerWidth * 0.88)
-      gsap.to(tape, {
-        x: () => -distance(),
-        ease: 'none',
-        scrollTrigger: {
-          trigger: root,
-          start: 'top top',
-          end: () => '+=' + distance(),
-          scrub: 0.7,
-          pin: true,
-          anticipatePin: 1,
-          invalidateOnRefresh: true,
+      ScrollTrigger.create({
+        trigger: root,
+        start: 'top top',
+        end: 'bottom bottom',
+        scrub: 0.5,
+        invalidateOnRefresh: true,
+        onUpdate: (self) => {
+          // O último clipe fica na tela até o fim da seção em vez de dividir a
+          // faixa em seis partes iguais: sem isso ele apareceria por um
+          // instante e a seção já teria acabado.
+          const i = Math.min(CLIPS.length - 1, Math.floor(self.progress * CLIPS.length))
+          setReel((atual) => (atual === i ? atual : i))
         },
       })
     }, root)
@@ -82,10 +102,45 @@ export default function ClipsSection() {
     return () => ctx.revert()
   }, [])
 
+  // A emenda: um estouro branco curto no momento exato da troca. É o artefato
+  // de uma colagem passando pelo projetor, e é ele que faz a troca ler como
+  // corte de montagem em vez de um src trocando de valor.
+  const primeiraBobina = useRef(true)
+  useEffect(() => {
+    if (primeiraBobina.current) {
+      primeiraBobina.current = false
+      return
+    }
+    const flash = flashRef.current
+    if (!flash) return
+    gsap
+      .timeline()
+      .fromTo(flash, { autoAlpha: 0 }, { autoAlpha: 0.9, duration: 0.07, ease: 'power2.out' })
+      .to(flash, { autoAlpha: 0, duration: 0.36, ease: 'power2.in' })
+
+    // O telão pisca de escala junto: o quadro "assenta" depois da emenda.
+    if (screenRef.current) {
+      gsap.fromTo(
+        screenRef.current,
+        { scale: 1.028 },
+        { scale: 1, duration: 0.5, ease: 'power3.out' }
+      )
+    }
+  }, [reel])
+
+  // O vídeo do telão roda mudo e em loop. Trocar o src pausa o elemento em
+  // parte dos navegadores, então o play é reemitido a cada bobina.
+  useEffect(() => {
+    const v = stageVideoRef.current
+    if (!v) return
+    v.load()
+    v.play().catch(() => {})
+  }, [reel])
+
   // Duração real de cada clipe, lida do arquivo. preload="metadata" baixa só o
   // cabeçalho — alguns segundos de rede, não os 8 a 21 MB de cada vídeo.
   useEffect(() => {
-    const els = previewRefs.current.filter(Boolean)
+    const els = stripRefs.current.filter(Boolean)
     const onMeta = (e) => {
       const i = els.indexOf(e.target)
       if (i >= 0) setDurations((d) => ({ ...d, [i]: e.target.duration }))
@@ -94,9 +149,9 @@ export default function ClipsSection() {
     return () => els.forEach((el) => el.removeEventListener('loadedmetadata', onMeta))
   }, [])
 
-  // ------------------------------------------------------------------- abertura
-  const openClip = useCallback((i, cardEl) => {
-    openerRef.current = cardEl
+  /* ---------------------------------------------------------------- abertura */
+  const openClip = useCallback((i, el) => {
+    openerRef.current = el
     setOpen(i)
   }, [])
 
@@ -106,7 +161,7 @@ export default function ClipsSection() {
     const card = openerRef.current
     if (!modal || !frame) return setOpen(null)
 
-    // Volta encolhendo para o card de origem — o inverso exato da abertura.
+    // Volta encolhendo para o elemento de origem — o inverso exato da abertura.
     const rect = card?.getBoundingClientRect()
     const tl = gsap.timeline({
       onComplete: () => {
@@ -132,9 +187,9 @@ export default function ClipsSection() {
     tl.to(modal, { autoAlpha: 0, duration: 0.34, ease: 'power2.in' }, 0)
   }, [])
 
-  // FLIP manual: o vídeo nasce exatamente sobre o card e cresce até a tela.
-  // Sem plugin — Flip é pago; medir os dois retângulos e interpolar dá o mesmo
-  // resultado e mantém a origem do movimento no card que foi clicado.
+  // FLIP manual: o vídeo nasce exatamente sobre o elemento clicado e cresce até
+  // a tela. Sem plugin — Flip é pago; medir os dois retângulos e interpolar dá
+  // o mesmo resultado e mantém a origem do movimento onde a mão tocou.
   useEffect(() => {
     if (open === null) return
     const modal = modalRef.current
@@ -226,63 +281,21 @@ export default function ClipsSection() {
     else v.pause()
   }, [playing, open])
 
-  // ------------------------------------------------------- tilt e brilho no card
-  const onCardMove = (e, i) => {
-    const card = cardRefs.current[i]
-    if (!card) return
-    const r = card.getBoundingClientRect()
-    const px = (e.clientX - r.left) / r.width
-    const py = (e.clientY - r.top) / r.height
-    card.style.setProperty('--tilt-y', `${(px - 0.5) * 13}deg`)
-    card.style.setProperty('--tilt-x', `${(0.5 - py) * 9}deg`)
-    card.style.setProperty('--gloss-x', `${px * 100}%`)
-    card.style.setProperty('--gloss-y', `${py * 100}%`)
-    // Sombra acompanhando a inclinação: luz vindo de cima-esquerda.
-    card.style.setProperty('--sx', `${(0.5 - px) * 26}px`)
-    card.style.setProperty('--sy', `${(0.5 - py) * 20 + 26}px`)
-  }
-
-  const onCardLeave = (i) => {
-    const card = cardRefs.current[i]
-    if (!card) return
-    card.style.setProperty('--tilt-y', '0deg')
-    card.style.setProperty('--tilt-x', '0deg')
-    card.style.setProperty('--sx', '0px')
-    card.style.setProperty('--sy', '26px')
-    const v = previewRefs.current[i]
-    if (v) {
-      v.pause()
-      v.currentTime = 0
-    }
-  }
-
-  const onCardEnter = (i) => {
-    if (open !== null) return
-    const v = previewRefs.current[i]
-    v?.play().catch(() => {})
-  }
-
   const progress = Number.isFinite(duration) && duration > 0 ? time / duration : 0
   const current = open !== null ? CLIPS[open] : null
+  const naTela = CLIPS[reel]
 
   return (
-    <section ref={rootRef} className="evom-clips" aria-label="Clipes">
+    <section ref={rootRef} className="evom-clips" style={{ height }} aria-label="Clipes">
       <div className="evom-clips__stage">
-        {/* O palco. Fundo, refletores, chão e fumaça rasteira — em camadas,
-            de trás para a frente, como a montagem real de um palco. */}
+        {/* O palco, em camadas de trás para a frente: parede, feixes, chão. */}
         <div className="evom-clips__house" aria-hidden="true">
           <span className="evom-clips__backwall" />
-
-          {/* Refletores: o cone é um trapézio com clip-path, não um gradiente
-              retangular. É o corte que faz ler como feixe saindo de uma fonte
-              pontual em vez de mancha vertical. */}
           {[0, 1, 2, 3].map((i) => (
             <span className="evom-clips__spot" key={i} style={{ '--i': i }} />
           ))}
-
           <span className="evom-clips__floor" />
           <span className="evom-clips__horizon" />
-
           {[0, 1, 2].map((i) => (
             <span className="evom-clips__fog" key={i} style={{ '--i': i }} />
           ))}
@@ -293,63 +306,90 @@ export default function ClipsSection() {
           <h2 className="evom-clips__title">A SALA DE PROJEÇÃO.</h2>
         </header>
 
-        <div ref={tapeRef} className="evom-clips__tape">
+        {/* ------------------------------------------------------------ telão */}
+        <div className="evom-clips__theatre">
+          {/* O feixe: um trapézio de luz que sai de trás de quem olha e abre
+              até a tela. É o corte, e não um gradiente, que faz ler como cone
+              vindo de uma fonte pontual. */}
+          <span className="evom-clips__beam" aria-hidden="true" />
+
+          <button
+            type="button"
+            ref={screenRef}
+            className="evom-clips__screen"
+            onClick={(e) => openClip(reel, e.currentTarget)}
+            aria-label={`Abrir clipe ${naTela.title || naTela.n} com som`}
+          >
+            <video
+              ref={stageVideoRef}
+              className="evom-clips__screen-video"
+              src={naTela.src}
+              muted
+              loop
+              autoPlay
+              playsInline
+              preload="auto"
+              disablePictureInPicture
+              aria-hidden="true"
+            />
+
+            {/* Tremor, cintilação e grão: as três assinaturas de projeção
+                física, empilhadas por cima do vídeo digital. */}
+            <span className="evom-clips__weave" aria-hidden="true" />
+            <span className="evom-clips__grain" aria-hidden="true" />
+            <span ref={flashRef} className="evom-clips__flash" aria-hidden="true" />
+
+            <span className="evom-clips__badge" aria-hidden="true">
+              <span className="evom-clips__n">{naTela.n}</span>
+              {naTela.title && <span className="evom-clips__name">{naTela.title}</span>}
+              {naTela.kind && <span className="evom-clips__tag">{naTela.kind}</span>}
+              {naTela.year && <span className="evom-clips__tag">{naTela.year}</span>}
+              <span className="evom-clips__dur">{fmt(durations[reel])}</span>
+            </span>
+
+            <span className="evom-clips__play" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20">
+                <path d="M8 5v14l11-7z" fill="currentColor" />
+              </svg>
+            </span>
+          </button>
+
+          {/* A poça de luz no chão do palco, sob a tela. */}
+          <span className="evom-clips__pool" aria-hidden="true" />
+        </div>
+
+        {/* ------------------------------------------------ a bancada de montagem */}
+        {/* Os seis quadros de película. O que está no projetor fica aceso; os
+            outros esperam apagados, como fotogramas numa mesa de corte. */}
+        <div ref={reelRef} className="evom-clips__reel" role="tablist" aria-label="Bobinas">
           {CLIPS.map((c, i) => (
-            <span className="evom-clips__slot" key={c.src}>
             <button
               type="button"
-              className="evom-clips__card"
-              ref={(el) => {
-                cardRefs.current[i] = el
-              }}
-              onPointerMove={(e) => onCardMove(e, i)}
-              onPointerEnter={() => onCardEnter(i)}
-              onPointerLeave={() => onCardLeave(i)}
-              onClick={(e) => openClip(i, e.currentTarget)}
-              aria-label={`Abrir clipe ${c.title || c.n}`}
+              key={c.src}
+              className={`evom-clips__frame-btn${i === reel ? ' is-on' : ''}`}
+              role="tab"
+              aria-selected={i === reel}
+              onClick={() => setReel(i)}
+              onDoubleClick={(e) => openClip(i, e.currentTarget)}
+              aria-label={`Bobina ${c.n}`}
             >
-              <span className="evom-clips__gloss" aria-hidden="true" />
-
               <video
                 ref={(el) => {
-                  previewRefs.current[i] = el
+                  stripRefs.current[i] = el
                 }}
                 src={c.src}
                 muted
-                loop
                 playsInline
                 preload="metadata"
                 disablePictureInPicture
                 aria-hidden="true"
               />
-
-              <span className="evom-clips__play" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="18" height="18">
-                  <path d="M8 5v14l11-7z" fill="currentColor" />
-                </svg>
-              </span>
-
-              <span className="evom-clips__meta">
-                <span className="evom-clips__n">{c.n}</span>
-                {/* Só desenha o que existe: sem título, o card mostra o número
-                    e a duração, e não um rótulo inventado. */}
-                {c.title && <span className="evom-clips__name">{c.title}</span>}
-                <span className="evom-clips__spacer" />
-                {c.kind && <span className="evom-clips__tag">{c.kind}</span>}
-                {c.year && <span className="evom-clips__tag">{c.year}</span>}
-                {c.views && <span className="evom-clips__tag">{c.views}</span>}
-                <span className="evom-clips__dur">{fmt(durations[i])}</span>
-              </span>
+              <span className="evom-clips__frame-n">{c.n}</span>
             </button>
-
-            {/* Poça de luz e sombra de contato: é o que assenta o card NO
-                chão. Sem elas ele flutua e o palco vira papel de parede. */}
-            <span className="evom-clips__pool" aria-hidden="true" />
-            </span>
           ))}
         </div>
 
-        <p className="evom-clips__hint">passe o mouse para pré-visualizar · clique para abrir</p>
+        <p className="evom-clips__hint">role para trocar a bobina · clique na tela para abrir</p>
       </div>
 
       {/* -------------------------------------------------------------- cinema */}

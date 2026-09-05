@@ -73,6 +73,74 @@
   justify-self: center;
   width: min(44vw, 470px);
   aspect-ratio: 1 / 1;
+  cursor: grab;
+  /* touch-action: none é o que faz o gesto existir no celular. Sem isto o
+     navegador interpreta o arrasto sobre o disco como rolagem da página e
+     cancela o ponteiro no meio do movimento. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  outline: none;
+}
+
+.evom-player__platter.is-grabbing {
+  cursor: grabbing;
+}
+
+.evom-player__platter:focus-visible {
+  outline: 1px solid rgba(196, 30, 58, 0.9);
+  outline-offset: 14px;
+  border-radius: 50%;
+}
+
+/* Anel de destaque enquanto o disco está na mão: a única forma de mostrar que
+   um objeto redondo virou controle sem escrever isso em cima dele. */
+.evom-player__platter::after {
+  content: '';
+  position: absolute;
+  inset: -3%;
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(196, 30, 58, 0), 0 0 60px rgba(196, 30, 58, 0);
+  transition: box-shadow 260ms ease;
+}
+
+.evom-player__platter.is-grabbing::after {
+  box-shadow: 0 0 0 1px rgba(196, 30, 58, 0.5), 0 0 70px rgba(196, 30, 58, 0.28);
+}
+
+/* A instrução, escrita no disco. Fica no anel liso entre a bolacha e os
+   sulcos, e some para sempre no primeiro toque. */
+.evom-player__grab {
+  position: absolute;
+  left: 50%;
+  bottom: 11%;
+  translate: -50% 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  pointer-events: none;
+  white-space: nowrap;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(245, 239, 230, 0.72);
+  background: rgba(10, 3, 5, 0.62);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(245, 239, 230, 0.12);
+  animation: evom-grab-pulse 3.4s ease-in-out infinite;
+  transition: opacity 400ms ease, translate 400ms ease;
+}
+
+.evom-player__platter.is-tocado .evom-player__grab {
+  opacity: 0;
+  translate: -50% 8px;
+}
+
+@keyframes evom-grab-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
 }
 
 .evom-player__disc {
@@ -83,15 +151,10 @@
   box-shadow: 0 40px 90px rgba(0, 0, 0, 0.8), inset 0 0 60px rgba(0, 0, 0, 0.9);
 }
 
-.evom-player__disc.is-spinning {
-  /* 33⅓ rpm dá 1,8s por volta. Usar a rotação real em vez de um número
-     arbitrário é o que faz o movimento parecer certo sem ninguém saber por quê. */
-  animation: evom-spin 1.8s linear infinite;
-}
-
-@keyframes evom-spin {
-  to { transform: rotate(360deg); }
-}
+/* A rotação saiu do CSS e virou um tween do GSAP.
+   Com @keyframes não existe forma de pegar o disco no meio do giro: pausar
+   prende o ângulo no que o CSS decidir e retomar salta. O tween mantém a
+   rotação como um número que o gesto lê e escreve. */
 
 /* Sulcos. repeating-radial-gradient desenha centenas de anéis com precisão
    subpixel — um bitmap serrilharia ao girar. */
@@ -114,6 +177,10 @@
 /* A capa como bolacha central: é literalmente o lugar dela num vinil. */
 .evom-player__label {
   position: absolute;
+  /* Sem isto o arrasto do disco vira arrasto da IMAGEM no navegador, e o
+     gesto morre no primeiro pixel. */
+  -webkit-user-drag: none;
+  pointer-events: none;
   top: 50%;
   left: 50%;
   width: 34%;
@@ -161,6 +228,7 @@
    visual para o resto girar em torno de alguma coisa. */
 .evom-player__post {
   position: absolute;
+  pointer-events: none;
   top: 0;
   left: 100%;
   width: 13%;

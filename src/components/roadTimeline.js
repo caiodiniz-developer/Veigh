@@ -96,6 +96,15 @@ const SKY_FRAG = /* glsl */ `
     // Terra: escura, com só um resto do clarão junto à linha.
     vec3 ground = mix(uFog * 0.9, uFog * 0.35, smoothstep(0.0, 0.42, HORIZON - vUv.y));
 
+    // Estrelas na parte alta, onde o céu já escureceu o bastante para elas
+    // existirem. Aparecem só acima do clarão do horizonte, que é onde estariam
+    // num fim de tarde de verdade.
+    vec2 sp = floor(vUv * uRes / 2.6);
+    float star = step(0.9972, hash(sp));
+    star *= smoothstep(0.25, 0.85, up);
+    star *= 0.55 + 0.45 * sin(uTime * 1.7 + hash(sp) * 40.0);
+    sky += vec3(star * 0.85);
+
     vec3 col = mix(ground, sky, above);
     col += (hash(vUv * uRes) - 0.5) * 0.012;
     gl_FragColor = vec4(col, 1.0);
@@ -131,6 +140,29 @@ const ROAD_FRAG = /* glsl */ `
     // Asfalto: escuro com grão fino, senão a estrada lê como plástico.
     float grain = hash(floor(vUv * vec2(600.0, 3000.0)));
     vec3 road = vec3(0.045, 0.028, 0.034) + grain * 0.03;
+
+    // ASFALTO MOLHADO.
+    //
+    // O que faltava na rua não era detalhe, era reflexo. Um asfalto seco à
+    // noite é uma faixa preta; um asfalto úmido devolve o clarão do horizonte
+    // em ângulo rasante, e é por isso que toda fotografia noturna de rua que
+    // vale alguma coisa foi feita depois da chuva.
+    //
+    // Não há reflexão de verdade aqui — não existe cena para refletir num
+    // plano. O que existe é a lei que a governa: quanto mais rasante o olhar,
+    // mais a superfície devolve. vDepth é o proxy do ângulo, porque a câmera
+    // está baixa e olhando na horizontal: longe é rasante, perto é de cima.
+    float rasante = smoothstep(12.0, 90.0, vDepth);
+
+    // Poças em manchas largas ao longo da pista, não uniformes — água parada
+    // não cobre asfalto por igual.
+    float pocas = 0.45 + 0.55 * hash(floor(vec2(vUv.x * 7.0, vUv.y * uLen * 0.06)));
+    float molhado = rasante * pocas;
+    road += uLight * molhado * 0.85;
+
+    // Rastros verticais: a luz refletida na água escorre no sentido da rua.
+    float rastro = hash(floor(vec2(vUv.x * 140.0, 0.0)));
+    road += uLight * molhado * rastro * 0.42;
 
     // Faixa central tracejada. O traço vive no espaço do plano, então fica
     // parado no mundo e é a câmera que passa por ele.
@@ -207,6 +239,51 @@ const CAR_FRAG = /* glsl */ `
     vec3 c = mix(vec3(0.85, 0.12, 0.1), vec3(1.0, 0.96, 0.88), step(0.5, vSeed));
     a *= 1.0 - smoothstep(40.0, 200.0, vDepth);
     gl_FragColor = vec4(c * a, a);
+  }
+`
+
+const DUST_VERT = /* glsl */ `
+  attribute vec3 aPos;
+  attribute float aSeed;
+  uniform float uTime;
+  uniform float uCamZ;
+  varying float vA;
+  varying float vDepth;
+
+  void main() {
+    // A poeira vive num bloco que ACOMPANHA a câmera. Espalhar partículas
+    // pelos 420 de estrada exigiria dezenas de milhares delas para a densidade
+    // aparecer perto; num bloco que anda junto, oitocentas bastam — e o
+    // envolvimento de fract() reposiciona cada uma no fim do bloco assim que
+    // ela sai por trás, então nunca falta nem sobra.
+    vec3 p = aPos;
+    p.y += sin(uTime * 0.35 + aSeed * 12.0) * 0.9;
+    p.x += cos(uTime * 0.27 + aSeed * 9.0) * 0.7;
+    float z = uCamZ - 4.0 - mod(p.z + uTime * 0.9, 60.0);
+
+    vec4 mv = modelViewMatrix * vec4(p.x, p.y, z, 1.0);
+    vDepth = -mv.z;
+    // Ponto do tamanho de um grão, encolhendo com a distância como qualquer
+    // coisa que tenha volume.
+    gl_PointSize = (26.0 + aSeed * 22.0) / max(vDepth, 1.0);
+    vA = 0.35 + 0.65 * sin(uTime * 1.9 + aSeed * 30.0);
+    gl_Position = projectionMatrix * mv;
+  }
+`
+
+const DUST_FRAG = /* glsl */ `
+  precision highp float;
+  uniform vec3 uLight;
+  varying float vA;
+  varying float vDepth;
+  void main() {
+    // Grão redondo e sem borda dura: partícula quadrada entrega o point sprite.
+    float d = length(gl_PointCoord - 0.5) * 2.0;
+    float a = pow(max(0.0, 1.0 - d), 2.0) * vA;
+    // Some junto com o resto da cena e também quando está perto demais, para
+    // nenhuma partícula estourar no rosto da câmera.
+    a *= smoothstep(1.5, 6.0, vDepth) * (1.0 - smoothstep(28.0, 62.0, vDepth));
+    gl_FragColor = vec4(uLight * 2.2 * a, a);
   }
 `
 
@@ -506,10 +583,65 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
     return m
   })
 
+  // Meio-fio: a faixa elevada entre o asfalto e a calçada. Sem ele os dois
+  // planos se encostam no mesmo nível e a rua não tem margem — parece asfalto
+  // pintado de dois tons, não uma via com guia.
+  const guiaMat = new THREE.MeshStandardMaterial({
+    color: 0x6a6058,
+    roughness: 0.9,
+    metalness: 0,
+  })
+  const guiaGeo = new THREE.BoxGeometry(0.45, 0.22, ROAD_LEN)
+  const guias = [-1, 1].map((lado) => {
+    const m = new THREE.Mesh(guiaGeo, guiaMat)
+    m.position.set(lado * (ROAD_W / 2 + 0.22), 0.11, -ROAD_LEN / 2)
+    scene.add(m)
+    return m
+  })
+
   // --- postes ---------------------------------------------------------------
-  // Só o halo, sem o mastro: a luz é o que se vê à noite, e billboards
-  // aditivos custam muito menos que cilindros com material emissivo.
-  const POLES = 46
+  //
+  // Antes existia só o halo, sem nada segurando a luz. Funcionava à noite
+  // fechada e passou a não funcionar: com o asfalto refletindo e o céu de fim
+  // de tarde, luzes flutuando sem mastro viram bolhas. O mastro é barato
+  // (dois boxes por poste, instanciados) e é ele que dá o ritmo vertical da
+  // rua — o metrônomo que faz a velocidade da câmera ser sentida.
+  const POSTES = 24
+  const mastroGeo = new THREE.BoxGeometry(0.16, 7.4, 0.16)
+  const bracoGeo = new THREE.BoxGeometry(1.5, 0.13, 0.13)
+  const posteMat = new THREE.MeshStandardMaterial({
+    color: 0x14100f,
+    roughness: 0.75,
+    metalness: 0.4,
+  })
+  const mastros = new THREE.InstancedMesh(mastroGeo, posteMat, POSTES)
+  const bracos = new THREE.InstancedMesh(bracoGeo, posteMat, POSTES)
+  mastros.frustumCulled = false
+  bracos.frustumCulled = false
+  scene.add(mastros)
+  scene.add(bracos)
+
+  const posteDummy = new THREE.Object3D()
+  for (let i = 0; i < POSTES; i++) {
+    const lado = i % 2 ? 1 : -1
+    const z = -12 - Math.floor(i / 2) * 33
+    posteDummy.position.set(lado * (ROAD_W / 2 + 0.9), 3.7, z)
+    posteDummy.rotation.set(0, 0, 0)
+    posteDummy.updateMatrix()
+    mastros.setMatrixAt(i, posteDummy.matrix)
+    // O braço avança sobre a pista, e é na ponta dele que o halo já existia.
+    posteDummy.position.set(lado * (ROAD_W / 2 + 0.2), 7.3, z)
+    posteDummy.updateMatrix()
+    bracos.setMatrixAt(i, posteDummy.matrix)
+  }
+  mastros.instanceMatrix.needsUpdate = true
+  bracos.instanceMatrix.needsUpdate = true
+
+  // --- halos --------------------------------------------------------------
+  // O halo agora tem dono: fica exatamente na ponta do braço de cada poste, e
+  // não mais espalhado por conta própria. Continua sendo billboard aditivo
+  // porque geometria não brilha — a luminária é o mastro, a luz é o quad.
+  const POLES = POSTES
   const glowGeo = new THREE.InstancedBufferGeometry()
   const glowQuad = new THREE.PlaneGeometry(1, 1)
   glowGeo.index = glowQuad.index
@@ -520,11 +652,12 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
   const gPos = new Float32Array(POLES * 3)
   const gSize = new Float32Array(POLES)
   for (let i = 0; i < POLES; i++) {
-    const side = i % 2 ? 1 : -1
-    gPos[i * 3] = side * (ROAD_W / 2 + 1.4)
-    gPos[i * 3 + 1] = 5.2
-    gPos[i * 3 + 2] = -10 - Math.floor(i / 2) * 17
-    gSize[i] = 3.2 + Math.random() * 1.6
+    const lado = i % 2 ? 1 : -1
+    // Mesmos números do laço dos postes: a luz nasce onde a luminária está.
+    gPos[i * 3] = lado * (ROAD_W / 2 + 0.55)
+    gPos[i * 3 + 1] = 7.2
+    gPos[i * 3 + 2] = -12 - Math.floor(i / 2) * 33
+    gSize[i] = 3.4 + Math.random() * 1.4
   }
   glowGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(gPos, 3))
   glowGeo.setAttribute('aSize', new THREE.InstancedBufferAttribute(gSize, 1))
@@ -609,6 +742,47 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
     }
     posAttr.needsUpdate = true
   }
+
+  // --- poeira no ar ---------------------------------------------------------
+  //
+  // O que separa uma rua renderizada de uma rua fotografada quase nunca é
+  // geometria: é o ar entre a câmera e o assunto. Oitocentos grãos suspensos,
+  // acesos pela luz da era, dão volume ao vazio que o asfalto e as fachadas
+  // deixam no meio do quadro.
+  const POEIRA = 800
+  const dustGeo = new THREE.BufferGeometry()
+  const dPos = new Float32Array(POEIRA * 3)
+  const dSeed = new Float32Array(POEIRA)
+  for (let i = 0; i < POEIRA; i++) {
+    dPos[i * 3] = (Math.random() - 0.5) * 26
+    dPos[i * 3 + 1] = 0.2 + Math.random() * 7
+    dPos[i * 3 + 2] = Math.random() * 60
+    dSeed[i] = Math.random()
+  }
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dPos, 3))
+  dustGeo.setAttribute('aPos', new THREE.BufferAttribute(dPos, 3))
+  dustGeo.setAttribute('aSeed', new THREE.BufferAttribute(dSeed, 1))
+
+  const dustUniforms = {
+    uTime: { value: 0 },
+    uCamZ: { value: 0 },
+    uLight: roadUniforms.uLight,
+  }
+  const poeira = new THREE.Points(
+    dustGeo,
+    new THREE.ShaderMaterial({
+      vertexShader: DUST_VERT,
+      fragmentShader: DUST_FRAG,
+      uniforms: dustUniforms,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false,
+    })
+  )
+  poeira.frustumCulled = false
+  poeira.renderOrder = 4
+  scene.add(poeira)
 
   // --- os anos no asfalto ---------------------------------------------------
   const marcoZ = (i) => -30 - i * ((ROAD_LEN - 70) / entries.length)
@@ -711,7 +885,11 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
       // dois não se encavalarem.
       // Mesma profundidade nas duas: entram e saem juntas do quadro.
       const z = marcoZ(i) + 4
-      const x = lado * (ROAD_W / 2 + 2.4)
+      // Recuadas para o fundo da calçada. A 2,4 do eixo elas dividiam o mesmo
+      // metro de acostamento com os carros estacionados, e o resultado era uma
+      // figura de pé EM CIMA do capô — o carro ocupa o meio-fio, quem está a
+      // pé fica atrás dele.
+      const x = lado * (ROAD_W / 2 + 4.6)
       plano.position.set(x, alt / 2, z)
       plano.rotation.y = lado * 0.22 // virado de leve para a pista
       scene.add(plano)
@@ -789,8 +967,14 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
       // outros dois ficam estacionados e são reposicionados à frente conforme
       // a câmera avança, então três carros dão a impressão de uma rua cheia.
       carros.push({ tipo: 'segue', x: ROAD_W * 0.26, dz: -7.5, giro: Math.PI })
-      carros.push({ tipo: 'parado', x: -(ROAD_W / 2 + 2.2), passo: 96, fase: 0, giro: 0 })
-      carros.push({ tipo: 'parado', x: ROAD_W / 2 + 2.2, passo: 96, fase: 48, giro: Math.PI })
+      // Os estacionados andam no MESMO passo dos marcos (70) e deslocados meio
+      // passo. É o que garante que eles nunca caiam em cima de um ano — antes
+      // o passo era 96 contra 70 dos marcos, os dois ciclos batiam de vez em
+      // quando, e o carro aparecia estacionado exatamente onde estão as
+      // figuras daquela era.
+      const ENTRE = (ROAD_LEN - 70) / entries.length
+      carros.push({ tipo: 'parado', x: -(ROAD_W / 2 + 1.5), passo: ENTRE, fase: ENTRE * 0.5, giro: 0 })
+      carros.push({ tipo: 'parado', x: ROAD_W / 2 + 1.5, passo: ENTRE, fase: ENTRE * 0.5, giro: Math.PI })
     }
   }
 
@@ -806,8 +990,11 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
       } else {
         // Reciclagem: o carro fica sempre no múltiplo do passo mais próximo à
         // frente da câmera, então nunca é visto aparecendo do nada.
-        const alvo = camZ - 34 - c.fase
-        const z = Math.round(alvo / c.passo) * c.passo
+        // Ancorado na grade dos marcos e deslocado meio passo, então o carro
+        // aparece sempre no meio do quarteirão. O índice entra na conta para
+        // o da esquerda e o da direita não estacionarem emparelhados.
+        const alvo = camZ - 40 - i * c.passo * 0.5
+        const z = Math.round((alvo - c.fase) / c.passo) * c.passo + c.fase
         dummy.position.set(c.x, 0, z)
         dummy.rotation.set(0, c.giro, 0)
       }
@@ -863,6 +1050,8 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
     last = now
     clock += dt
     skyUniformsRef.uTime.value = clock
+    dustUniforms.uTime.value = clock
+    dustUniforms.uCamZ.value = camera.position.z
     moverTrafego(clock)
     posicionarCarros(clock)
     render()
@@ -925,6 +1114,7 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
       ceu.color.copy(light).lerp(new THREE.Color(1, 1, 1), 0.25)
       renderer.setClearColor(fog, 1)
 
+      dustUniforms.uCamZ.value = camera.position.z
       posicionarCarros(clock)
       render()
       return { light: `#${light.getHexString()}`, index: i0 }
@@ -963,6 +1153,19 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
       })
       calcadaMat.dispose()
 
+      scene.remove(poeira)
+      dustGeo.dispose()
+      poeira.material.dispose()
+      scene.remove(mastros)
+      scene.remove(bracos)
+      mastroGeo.dispose()
+      bracoGeo.dispose()
+      posteMat.dispose()
+      mastros.dispose()
+      bracos.dispose()
+      guias.forEach((g) => scene.remove(g))
+      guiaGeo.dispose()
+      guiaMat.dispose()
       carQuad.dispose()
       carLightGeo.dispose()
       carLights.material.dispose()

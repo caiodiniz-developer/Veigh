@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { CAPAS, TRACKLIST, spotifyForTrack, spotifyForAlbum } from '../assets.js'
@@ -7,7 +7,7 @@ import './PlayerSection.css'
 gsap.registerPlugin(ScrollTrigger)
 
 /**
- * Ouça o projeto — a vitrola.
+ * Ouça o projeto — a vitrola, agora com o disco na mão.
  *
  * A seção era um cover flow. O problema não era o acabamento: as 16 faixas
  * dividem UMA capa, então o carrossel exibia dezesseis imagens idênticas e a
@@ -15,8 +15,19 @@ gsap.registerPlugin(ScrollTrigger)
  *
  * Uma vitrola resolve pela raiz. O disco é um só, como no mundo real; a capa
  * vira a bolacha central, que é exatamente o lugar dela num vinil; e as faixas
- * deixam de ser imagens para virar POSIÇÕES no sulco. Escolher uma música
- * passa a ser mover o braço, que é o gesto do objeto.
+ * deixam de ser imagens para virar POSIÇÕES no sulco.
+ *
+ * Faltava a parte que fazia disso um objeto e não um desenho de objeto: a mão.
+ * Agora existem os dois gestos que se faz com um vinil, e nenhum deles é um
+ * botão disfarçado:
+ *
+ *   ARRASTAR o disco  gira a bolacha sob o dedo e passa as faixas, como quem
+ *                     procura um trecho girando o prato com a mão
+ *   TOCAR num sulco   pousa a agulha ali — o raio do ponto tocado É a faixa,
+ *                     que é literalmente como um vinil é endereçado
+ *
+ * A lista ao lado continua clicável e navegável por teclado, e o próprio disco
+ * responde às setas: o gesto é o caminho bonito, nunca o único caminho.
  *
  * Sem áudio no projeto, o disco gira mas a agulha não finge tocar o que não
  * existe: quem leva ao som é o link do Spotify.
@@ -40,6 +51,19 @@ gsap.registerPlugin(ScrollTrigger)
 const ARM_START = 7
 const ARM_END = 30
 
+// Os mesmos dois raios, agora do lado de cá: onde começa e onde acaba a área
+// gravada, em fração do raio. Toque fora dessa faixa não endereça faixa
+// nenhuma — é a borda lisa do disco ou a bolacha central.
+const GROOVE_OUT = 0.97
+const GROOVE_IN = 0.4
+
+// Quantos graus de arrasto valem uma faixa. Calibrado para uma volta completa
+// varrer o disco inteiro: 360 / 16 = 22,5. Mais curto e o dedo passa cinco
+// faixas sem querer; mais longo e girar o disco não parece fazer nada.
+const DEG_PER_TRACK = 22.5
+
+const clamp = (v, a, b) => Math.min(Math.max(v, a), b)
+
 export default function PlayerSection() {
   const tracks = useMemo(
     () =>
@@ -53,10 +77,43 @@ export default function PlayerSection() {
 
   const [index, setIndex] = useState(3) // "Artista Genérico", a do exemplo do briefing
   const [spinning, setSpinning] = useState(true)
+  const [grabbing, setGrabbing] = useState(false)
+  const [tocado, setTocado] = useState(false)
 
   const rootRef = useRef(null)
   const armRef = useRef(null)
   const listRef = useRef(null)
+  const platterRef = useRef(null)
+  const discRef = useRef(null)
+
+  // A rotação do disco passa a ser um tween do GSAP, não uma animação CSS.
+  //
+  // Com @keyframes não há como pegar o disco no meio do giro: pausar prende o
+  // ângulo no que o CSS decidir e retomar salta. Um tween infinito mantém a
+  // rotação como um número que dá para ler e escrever — que é exatamente o que
+  // permite o dedo assumir o controle no meio da volta e devolver de onde
+  // parou.
+  const spinRef = useRef(null)
+  useEffect(() => {
+    const disc = discRef.current
+    if (!disc) return
+    // 1,8s por volta = 33⅓ rpm. Usar a rotação real em vez de um número
+    // arbitrário é o que faz o movimento parecer certo sem ninguém saber por quê.
+    spinRef.current = gsap.to(disc, {
+      rotation: '+=360',
+      duration: 1.8,
+      ease: 'none',
+      repeat: -1,
+    })
+    return () => spinRef.current?.kill()
+  }, [])
+
+  useEffect(() => {
+    const t = spinRef.current
+    if (!t) return
+    if (spinning && !grabbing) t.play()
+    else t.pause()
+  }, [spinning, grabbing])
 
   // O braço vai até o sulco da faixa. O ângulo é derivado do índice, então
   // acrescentar ou tirar faixas não exige recalcular nada.
@@ -77,8 +134,16 @@ export default function PlayerSection() {
       return
     }
 
-    gsap.to(arm, { rotate, duration: 0.9, ease: 'power3.inOut', overwrite: 'auto' })
-  }, [index, tracks.length])
+    // Com o disco na mão o braço acompanha na hora. O amortecimento de 0,9s é
+    // bonito quando a faixa vem da lista e é errado quando vem do dedo: a
+    // agulha chegaria depois que a mão já parou.
+    gsap.to(arm, {
+      rotate,
+      duration: grabbing ? 0.18 : 0.9,
+      ease: grabbing ? 'power2.out' : 'power3.inOut',
+      overwrite: 'auto',
+    })
+  }, [index, tracks.length, grabbing])
 
   // Mantém a faixa ativa visível na lista sem arrastar a página junto.
   useEffect(() => {
@@ -111,16 +176,106 @@ export default function PlayerSection() {
     return () => ctx.revert()
   }, [])
 
+  /* ------------------------------------------------------------- o gesto -- */
+
+  // O estado do arrasto vive fora do React de propósito: ele muda a cada
+  // pointermove, e um setState por evento de ponteiro re-renderizaria dezesseis
+  // itens de lista a 120 Hz para não mostrar nada de diferente.
+  const drag = useRef({ active: false, lastAngle: 0, acc: 0, moved: 0 })
+
+  const centro = () => {
+    const r = platterRef.current.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, raio: r.width / 2 }
+  }
+
+  const anguloDe = (e, c) => (Math.atan2(e.clientY - c.y, e.clientX - c.x) * 180) / Math.PI
+
+  const onPointerDown = (e) => {
+    if (!platterRef.current) return
+    const c = centro()
+    drag.current = { active: true, lastAngle: anguloDe(e, c), acc: 0, moved: 0 }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    setGrabbing(true)
+    setTocado(true)
+  }
+
+  const onPointerMove = (e) => {
+    const d = drag.current
+    if (!d.active || !platterRef.current || !discRef.current) return
+
+    const c = centro()
+    const a = anguloDe(e, c)
+
+    // Diferença angular normalizada para (-180, 180]. Sem isso a passagem pelo
+    // corte de 180° vira um salto de 360 graus e o disco dá um pinote.
+    let delta = a - d.lastAngle
+    if (delta > 180) delta -= 360
+    if (delta < -180) delta += 360
+    d.lastAngle = a
+    d.moved += Math.abs(delta)
+
+    // O disco gira sob o dedo.
+    gsap.set(discRef.current, { rotation: '+=' + delta })
+
+    // E o giro acumulado vira faixa. Horário (delta positivo) avança.
+    d.acc += delta
+    const passos = Math.trunc(d.acc / DEG_PER_TRACK)
+    if (passos !== 0) {
+      d.acc -= passos * DEG_PER_TRACK
+      setIndex((i) => clamp(i + passos, 0, tracks.length - 1))
+    }
+  }
+
+  const onPointerUp = (e) => {
+    const d = drag.current
+    if (!d.active) return
+    d.active = false
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    setGrabbing(false)
+
+    // Movimento curto é toque, não arrasto: pousa a agulha no raio tocado.
+    //
+    // O limiar é angular porque o gesto é angular. Seis graus acumulados é
+    // menos do que o tremor da mão em qualquer tela e mais do que zero, que
+    // transformaria todo clique num arrasto de uma faixa.
+    if (d.moved < 6) {
+      const c = centro()
+      const dist = Math.hypot(e.clientX - c.x, e.clientY - c.y) / c.raio
+      if (dist <= GROOVE_OUT && dist >= GROOVE_IN) {
+        // De fora para dentro = da primeira para a última, que é a ordem em que
+        // um sulco é gravado.
+        const t = (GROOVE_OUT - dist) / (GROOVE_OUT - GROOVE_IN)
+        setIndex(clamp(Math.round(t * (tracks.length - 1)), 0, tracks.length - 1))
+      }
+    }
+  }
+
   const current = tracks[index]
 
-  const onKeyDown = (e) => {
+  const passo = useCallback(
+    (n) => setIndex((i) => clamp(i + n, 0, tracks.length - 1)),
+    [tracks.length]
+  )
+
+  const onListKey = (e) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setIndex((i) => Math.min(tracks.length - 1, i + 1))
+      passo(1)
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setIndex((i) => Math.max(0, i - 1))
+      passo(-1)
+    }
+  }
+
+  const onPlatterKey = (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      passo(1)
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      passo(-1)
     }
   }
 
@@ -139,12 +294,38 @@ export default function PlayerSection() {
       </header>
 
       <div className="evom-player__deck evom-player__reveal">
-        <div className="evom-player__platter">
-          <div className={`evom-player__disc${spinning ? ' is-spinning' : ''}`}>
+        {/* O prato inteiro é o controle, e não um botão dentro dele: quem pega
+            um disco pega pela superfície. role="slider" porque é exatamente o
+            que ele é — um valor contínuo entre a primeira e a última faixa. */}
+        <div
+          ref={platterRef}
+          className={`evom-player__platter${grabbing ? ' is-grabbing' : ''}${
+            tocado ? ' is-tocado' : ''
+          }`}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onKeyDown={onPlatterKey}
+          role="slider"
+          tabIndex={0}
+          aria-label="Disco: arraste para passar as faixas, toque num sulco para pousar a agulha"
+          aria-valuemin={1}
+          aria-valuemax={tracks.length}
+          aria-valuenow={index + 1}
+          aria-valuetext={current.title}
+        >
+          <div ref={discRef} className="evom-player__disc">
             {/* Sulcos em gradiente: um vinil tem centenas de anéis, e nenhum
                 bitmap acompanharia a rotação sem serrilhar. */}
             <span className="evom-player__grooves" aria-hidden="true" />
-            <img className="evom-player__label" src={CAPAS.euVenciOMundo} alt="" aria-hidden="true" />
+            <img
+              className="evom-player__label"
+              src={CAPAS.euVenciOMundo}
+              alt=""
+              aria-hidden="true"
+              draggable="false"
+            />
             <span className="evom-player__spindle" aria-hidden="true" />
           </div>
 
@@ -160,6 +341,12 @@ export default function PlayerSection() {
             <span className="evom-player__arm-rod" />
             <span className="evom-player__arm-head" />
           </div>
+
+          {/* A instrução some no primeiro toque: quem já descobriu o gesto não
+              precisa continuar sendo instruído sobre ele. */}
+          <span className="evom-player__grab" aria-hidden="true">
+            arraste o disco
+          </span>
         </div>
 
         <div className="evom-player__side">
@@ -192,7 +379,7 @@ export default function PlayerSection() {
           <ol
             ref={listRef}
             className="evom-player__list"
-            onKeyDown={onKeyDown}
+            onKeyDown={onListKey}
             tabIndex={0}
             aria-label="Faixas do álbum"
           >

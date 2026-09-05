@@ -31,14 +31,15 @@
   position: absolute;
   inset: 0;
   z-index: 1;
-  /* auto 100% em vez de cover: a caixa é a viewport inteira (landscape), mas a
-     foto é retrato. Com cover ela seria escalada pela largura da caixa e
-     ampliada 2,2x; com auto 100% ela é desenhada na altura da viewport e
-     ~506px de largura — abaixo dos 1152px do arquivo, ou seja, reduzindo. */
   background-position: center center;
-  /* cover, não "auto 100%": o loop é quadrado (800x800) e a viewport é
-     larga, então encaixar pela altura deixaria faixa vazia nos dois lados. */
-  background-size: cover;
+  /* contain: o loop aparece INTEIRO, sem corte.
+     
+     Passou por cover no meio do caminho, para não sobrar faixa vazia nas
+     laterais. Mas o arquivo é quadrado (800x800) e a viewport é larga, então
+     cover cortava topo e base da cena — e o que estava sendo cortado era
+     justamente o enquadramento que alguém compôs. Sobra preto nos lados, e
+     preto ao redor de uma imagem projetada é a moldura, não uma falha. */
+  background-size: contain;
   background-repeat: no-repeat;
   /* Começa fechado na faixa do texto; o GSAP abre até inset(0). */
   clip-path: inset(44% 32% 44% 32%);
@@ -48,9 +49,9 @@
   will-change: clip-path, opacity;
 }
 
-/* A foto é pequena (1152px de largura) para um plano cheio. O grain e o leve
-   escurecimento não são só estética: quebram a suavidade do upscale, que é o
-   que mais denuncia imagem ampliada. */
+/* Grão por cima do loop. Não é só estética: o arquivo é 800x800 desenhado
+   maior que isso, e o ruído quebra a suavidade do upscale — que é o que mais
+   denuncia imagem ampliada. */
 .evom-manifesto__reveal::after {
   content: '';
   position: absolute;

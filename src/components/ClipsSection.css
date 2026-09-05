@@ -9,15 +9,17 @@
 }
 
 .evom-clips__stage {
-  position: relative;
+  /* sticky em vez de pin: a seção tem altura própria e o palco fica preso
+     enquanto o scroll passa as bobinas. Um pin do ScrollTrigger aqui criaria
+     um wrapper extra e brigaria com o sticky das seções vizinhas. */
+  position: sticky;
+  top: 0;
   height: 100vh;
   height: 100svh;
   display: flex;
   flex-direction: column;
-  /* Empurrado para baixo de propósito: os cards ficam sobre a linha do
-     horizonte do palco (68%), não boiando no centro da tela. */
-  justify-content: flex-end;
-  padding-bottom: 12vh;
+  justify-content: center;
+  padding-bottom: 6vh;
   gap: clamp(16px, 3.4vh, 36px);
   overflow: hidden;
   isolation: isolate;
@@ -154,240 +156,299 @@
   letter-spacing: -0.03em;
 }
 
-/* --------------------------------------------------------- cards de vidro */
+/* ============================================================== o telão === */
 
-.evom-clips__tape {
-  display: flex;
-  align-items: center;
-  gap: clamp(16px, 2.6vw, 38px);
-  padding: 0 clamp(20px, 5vw, 92px);
-  will-change: transform;
-}
-
-/* O slot existe para a poça de luz viver FORA do card, que tem overflow
-   hidden. Sem o slot, a luz seria recortada pela própria borda do card. */
-.evom-clips__slot {
+.evom-clips__theatre {
   position: relative;
-  flex: 0 0 auto;
-  display: block;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  padding: 0 clamp(20px, 5vw, 92px);
 }
 
-/* Poça de luz e sombra de contato: é o que assenta o card no chão. Sem ela
-   ele flutua e o palco vira papel de parede atrás de um carrossel. */
+/* O feixe de projeção.
+
+   Sai de trás de quem olha e abre até a tela — por isso o trapézio é INVERTIDO
+   em relação ao refletor do palco: estreito embaixo, na altura de quem
+   projeta, e largo em cima, na tela. Um cone que estreitasse na tela seria uma
+   lanterna apontada para o público. */
+.evom-clips__beam {
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  bottom: -34%;
+  width: 128%;
+  height: 150%;
+  translate: -50% 0;
+  clip-path: polygon(46% 100%, 54% 100%, 100% 0%, 0% 0%);
+  background: linear-gradient(
+    0deg,
+    rgba(255, 240, 220, 0.16) 0%,
+    rgba(255, 240, 220, 0.07) 44%,
+    transparent 86%
+  );
+  filter: blur(18px);
+  pointer-events: none;
+  /* O feixe respira: sem variação ele é um plano de cor, não luz atravessando
+     ar com poeira dentro. */
+  animation: evom-beam-breathe 7.5s ease-in-out infinite alternate;
+}
+
+@keyframes evom-beam-breathe {
+  from { opacity: 0.68; }
+  to { opacity: 1; }
+}
+
+/* A tela.
+
+   Proporção 16:9 e largura limitada pela ALTURA disponível, não só pela
+   largura da viewport: numa tela baixa e larga, dimensionar pela largura
+   empurraria a bancada de montagem para fora do quadro. */
+.evom-clips__screen {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: min(74vw, 62vh * 16 / 9, 1080px);
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #000;
+  /* Moldura de tela de projeção, e o halo da luz batendo nela. */
+  box-shadow:
+    0 0 0 2px rgba(10, 3, 5, 0.9),
+    0 0 0 3px rgba(245, 239, 230, 0.1),
+    0 40px 120px rgba(0, 0, 0, 0.85),
+    0 0 140px rgba(255, 226, 190, 0.14);
+  will-change: transform;
+  transition: box-shadow 320ms ease;
+}
+
+.evom-clips__screen:hover,
+.evom-clips__screen:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(10, 3, 5, 0.9),
+    0 0 0 3px rgba(196, 30, 58, 0.7),
+    0 40px 120px rgba(0, 0, 0, 0.85),
+    0 0 180px rgba(196, 30, 58, 0.26);
+}
+
+.evom-clips__screen-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Cintilação do obturador: a luminosidade varia de leve o tempo todo. É
+     pequena de propósito — projeção real oscila, projeção exagerada vira
+     efeito de filtro. */
+  animation: evom-flicker 2.6s steps(12) infinite;
+}
+
+@keyframes evom-flicker {
+  0%, 100% { filter: brightness(1) contrast(1.04); }
+  32% { filter: brightness(0.965) contrast(1.06); }
+  61% { filter: brightness(1.025) contrast(1.02); }
+  84% { filter: brightness(0.985) contrast(1.05); }
+}
+
+/* GATE WEAVE: o quadro nunca fica perfeitamente registrado no projetor. São
+   frações de por cento, e é justamente por serem quase imperceptíveis que
+   funcionam — o olho lê "película" sem conseguir dizer por quê. */
+.evom-clips__weave {
+  position: absolute;
+  inset: -1%;
+  pointer-events: none;
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.7);
+  animation: evom-weave 3.1s ease-in-out infinite;
+}
+
+@keyframes evom-weave {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  25% { transform: translate3d(0.12%, -0.1%, 0); }
+  50% { transform: translate3d(-0.08%, 0.14%, 0); }
+  75% { transform: translate3d(0.06%, 0.06%, 0); }
+}
+
+/* Grão por cima de tudo: é ele que costura o vídeo digital ao resto da cena.
+   Turbulência SVG em vez de PNG — não pesa nada e não pixeliza ao escalar. */
+.evom-clips__grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23g)' opacity='0.55'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+  opacity: 0.2;
+  animation: evom-grain 0.7s steps(4) infinite;
+}
+
+@keyframes evom-grain {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-3%, 2%); }
+  50% { transform: translate(2%, -3%); }
+  75% { transform: translate(-2%, -2%); }
+  100% { transform: translate(0, 0); }
+}
+
+/* A emenda: estouro branco no momento da troca de bobina. */
+.evom-clips__flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: #fff6ea;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.evom-clips__badge {
+  position: absolute;
+  z-index: 3;
+  left: 14px;
+  bottom: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(6, 1, 3, 0.62);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(245, 239, 230, 0.1);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+.evom-clips__play {
+  position: absolute;
+  z-index: 3;
+  right: 14px;
+  bottom: 12px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: #fff8ec;
+  background: rgba(196, 30, 58, 0.9);
+  box-shadow: 0 8px 30px rgba(196, 30, 58, 0.5);
+  transition: transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.evom-clips__screen:hover .evom-clips__play {
+  transform: scale(1.12);
+}
+
+/* A poça de luz no chão, sob a tela: é o que assenta o telão NO palco. Sem
+   ela ele flutua e o palco atrás vira papel de parede. */
 .evom-clips__pool {
   position: absolute;
-  z-index: -1;
+  z-index: 0;
   left: 50%;
-  bottom: -26px;
-  width: 116%;
-  height: 54px;
+  bottom: -6%;
+  width: 70%;
+  height: 16%;
   translate: -50% 0;
   border-radius: 50%;
   background: radial-gradient(
     ellipse at 50% 50%,
-    rgba(255, 214, 176, 0.34) 0%,
+    rgba(255, 226, 190, 0.3) 0%,
     rgba(196, 30, 58, 0.16) 42%,
     transparent 72%
   );
-  filter: blur(12px);
-  opacity: 0.55;
-  transition: opacity 420ms ease, width 420ms ease;
-}
-
-.evom-clips__slot:hover .evom-clips__pool {
-  opacity: 1;
-  width: 132%;
-}
-
-/* Reflexo no piso polido.
-
-   Espelhar o vídeo de verdade exigiria um segundo <video> por card — seis
-   decodificações a mais só para o reflexo. Em vez disso, um borrão vertical
-   que herda a cor dominante do card e desbota para baixo: à distância o olho
-   lê como reflexo em piso molhado, e custa um gradiente. */
-.evom-clips__slot::after {
-  content: '';
-  position: absolute;
-  z-index: -2;
-  left: 4%;
-  right: 4%;
-  top: 100%;
-  height: 42%;
-  background: linear-gradient(
-    180deg,
-    rgba(196, 30, 58, 0.26) 0%,
-    rgba(120, 24, 40, 0.10) 42%,
-    transparent 88%
-  );
-  filter: blur(16px);
-  transform: scaleY(-1);
-  transform-origin: 50% 0;
-  opacity: 0.75;
-  transition: opacity 420ms ease;
+  filter: blur(22px);
   pointer-events: none;
 }
 
-.evom-clips__slot:hover::after {
-  opacity: 1;
+/* =================================================== a bancada de montagem */
+
+/* Os seis fotogramas. O que está no projetor fica aceso e à frente; os outros
+   esperam apagados, como quadros de película numa mesa de corte. */
+.evom-clips__reel {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(6px, 1vw, 14px);
+  padding: 0 clamp(20px, 5vw, 92px);
 }
 
-.evom-clips__card {
-  --tilt-x: 0deg;
-  --tilt-y: 0deg;
-  --gloss-x: 50%;
-  --gloss-y: 0%;
-  --sx: 0px;
-  --sy: 26px;
-
+.evom-clips__frame-btn {
   position: relative;
-  flex: 0 0 auto;
-  width: clamp(250px, 33vw, 480px);
+  flex: none;
+  width: clamp(64px, 8.4vw, 116px);
   aspect-ratio: 16 / 10;
   padding: 0;
+  border: 1px solid rgba(245, 239, 230, 0.1);
+  border-radius: 2px;
   overflow: hidden;
-  border: 1px solid rgba(245, 239, 230, 0.16);
-  border-bottom-color: rgba(6, 1, 3, 0.6);
-  border-radius: 16px;
-  background: rgba(20, 6, 10, 0.5);
-  backdrop-filter: blur(18px) saturate(1.2);
-  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  background: #0a0305;
   cursor: pointer;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-
-  transform: perspective(1200px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
-  transform-style: preserve-3d;
-  /* A sombra segue a inclinação: a luz vem de cima, então inclinar o card
-     move a sombra para o lado oposto. É o detalhe que faz parecer objeto. */
-  box-shadow: var(--sx) var(--sy) 60px rgba(0, 0, 0, 0.66),
-    inset 0 1px 0 rgba(245, 239, 230, 0.18);
-  transition: transform 420ms cubic-bezier(0.22, 0.9, 0.3, 1),
-    box-shadow 420ms ease, border-color 300ms ease;
-  will-change: transform;
+  opacity: 0.34;
+  filter: grayscale(1) brightness(0.7);
+  transition:
+    opacity 320ms ease,
+    filter 320ms ease,
+    transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    border-color 320ms ease;
 }
 
-.evom-clips__card:hover,
-.evom-clips__card:focus-visible {
-  border-color: rgba(196, 30, 58, 0.62);
+.evom-clips__frame-btn:hover,
+.evom-clips__frame-btn:focus-visible {
   outline: none;
+  opacity: 0.72;
+  filter: grayscale(0.4) brightness(0.95);
+  transform: translateY(-4px);
 }
 
-.evom-clips__gloss {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  border-radius: inherit;
-  background: radial-gradient(
-    340px circle at var(--gloss-x) var(--gloss-y),
-    rgba(255, 246, 231, 0.18) 0%,
-    transparent 62%
-  );
-  opacity: 0;
-  transition: opacity 300ms ease;
-}
-
-.evom-clips__card:hover .evom-clips__gloss {
+/* O fotograma que está no projetor: colorido, levantado e com a marca da luz. */
+.evom-clips__frame-btn.is-on {
   opacity: 1;
+  filter: none;
+  transform: translateY(-10px);
+  border-color: rgba(196, 30, 58, 0.85);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.7), 0 0 34px rgba(196, 30, 58, 0.34);
 }
 
-.evom-clips__card video {
-  position: absolute;
-  inset: 0;
+.evom-clips__frame-btn video {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  z-index: 1;
-  opacity: 0.82;
-  transition: opacity 400ms ease, transform 700ms cubic-bezier(0.22, 0.9, 0.3, 1);
 }
 
-.evom-clips__card:hover video {
-  opacity: 1;
-  transform: scale(1.05);
-}
-
-/* Botão de play com onda discreta — respira devagar, sem chamar atenção. */
-.evom-clips__play {
+.evom-clips__frame-n {
   position: absolute;
-  z-index: 3;
-  top: 50%;
-  left: 50%;
-  translate: -50% -50%;
-  display: grid;
-  place-items: center;
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: rgba(6, 1, 3, 0.5);
-  border: 1px solid rgba(245, 239, 230, 0.3);
-  backdrop-filter: blur(10px);
-  color: var(--evom-bone);
-  transform: translateZ(30px);
-}
-
-.evom-clips__play::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: 50%;
-  border: 1px solid rgba(196, 30, 58, 0.6);
-  animation: evom-pulse 2.8s ease-out infinite;
-}
-
-@keyframes evom-pulse {
-  0% {
-    transform: scale(1);
-    opacity: 0.7;
-  }
-  70%,
-  100% {
-    transform: scale(1.7);
-    opacity: 0;
-  }
-}
-
-.evom-clips__meta {
-  position: absolute;
-  z-index: 3;
-  inset: auto 0 0 0;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 44px 16px 14px;
-  background: linear-gradient(180deg, transparent, rgba(4, 1, 2, 0.92));
+  left: 5px;
+  bottom: 3px;
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  transform: translateZ(20px);
-}
-
-.evom-clips__spacer {
-  flex: 1;
+  font-size: 0.56rem;
+  letter-spacing: 0.18em;
+  color: rgba(245, 239, 230, 0.75);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.95);
 }
 
 .evom-clips__n {
-  font-size: 0.7rem;
-  letter-spacing: 0.2em;
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
   color: var(--evom-ruby);
+  font-variant-numeric: tabular-nums;
 }
 
 .evom-clips__name {
-  font-size: 0.92rem;
-  letter-spacing: -0.01em;
-  color: var(--evom-bone);
+  font-size: 0.9rem;
+  color: #fff8ec;
 }
 
 .evom-clips__tag,
 .evom-clips__dur {
-  font-size: 0.62rem;
-  letter-spacing: 0.16em;
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(245, 239, 230, 0.55);
+  color: rgba(245, 239, 230, 0.5);
 }
 
 .evom-clips__dur {
   font-variant-numeric: tabular-nums;
-  color: rgba(245, 239, 230, 0.78);
 }
 
 .evom-clips__hint {
@@ -535,13 +596,17 @@
 /* ---------------------------------------------------------------- mobile */
 
 @media (max-width: 760px) {
-  .evom-clips__card {
-    width: 80vw;
-    transform: none; /* sem hover, o tilt não tem gatilho */
+  .evom-clips__screen {
+    width: 92vw;
   }
 
-  .evom-clips__gloss {
-    display: none;
+  .evom-clips__frame-btn {
+    width: 13vw;
+  }
+
+  .evom-clips__badge {
+    gap: 8px;
+    padding: 5px 10px;
   }
 
   .evom-clips__frame {
