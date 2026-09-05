@@ -110,19 +110,87 @@
 }
 
 .evom-intro__letters {
+  /* --px e --py vêm do ponteiro (-1 a 1), escritos pelo JS. Ficam aqui, no
+     grupo, e cada slot os multiplica pela sua própria profundidade — é o que
+     transforma quatro deslocamentos iguais em paralaxe. */
+  --px: 0;
+  --py: 0;
+
   display: flex;
   align-items: flex-end;
   justify-content: center;
   gap: var(--evom-letter-gap);
   width: var(--evom-letters-width);
+  /* Espaço acima para as correntes: sem isto elas nascem cortadas pelo topo
+     da caixa das letras. */
+  padding-top: 30vh;
+  margin-top: -30vh;
+  will-change: transform, opacity;
 }
 
-/* O slot reserva o espaço da letra desde o começo: quando ela cresce,
-   as vizinhas não se mexem. */
+/* O slot reserva o espaço da letra desde o começo: quando ela cai, as
+   vizinhas não se mexem. */
 .evom-intro__slot {
+  position: relative;
   display: block;
   flex: 0 0 calc((100% - 3 * var(--evom-letter-gap)) / 4);
   aspect-ratio: 1080 / 1350;
+
+  /* Paralaxe de ponteiro. Usa a propriedade individual translate, e não
+     transform, de propósito: o GSAP anima transform no .evom-intro__hang, que
+     é outro elemento — mas manter as duas coisas em propriedades diferentes
+     garante que nunca vão brigar se alguém mudar o alvo depois. */
+  translate: calc(var(--px) * var(--depth, 1) * 15px) calc(var(--py) * var(--depth, 1) * 10px);
+  transition: translate 520ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* O PÊNDULO.
+
+   Gira em torno de um ponto muito acima da própria caixa — 320% da altura,
+   que é aproximadamente onde a corrente prende. Um transform-origin dentro da
+   letra daria giro de hélice; o pivô no teto é o que faz o movimento ler como
+   peça pendurada e é o que dá a lentidão característica de um pêndulo longo. */
+.evom-intro__hang {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* O pivô fica onde a corrente prende, e não num número escolhido a olho.
+     A corrente tem 44vh; o slot tem a largura de um quarto do grupo por 1,25
+     (a proporção do PNG), o que dá cerca de 262px numa tela de 900 — ou seja,
+     a corrente vale ~150% da altura do slot. Com o pivô a -320% o braço do
+     pêndulo ficava três vezes maior que a corrente desenhada, e 17 graus
+     atiravam a joia 280px para o lado: na primeira captura o "O" caiu no
+     canto da tela, longe do próprio slot. */
+  transform-origin: 50% -150%;
+  will-change: transform, opacity;
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* A corrente. Sobe do topo da joia até fora do quadro, e os elos são um
+   gradiente repetido — desenhar elo por elo seria dezenas de nós para um
+   detalhe de dois pixels de largura. */
+.evom-intro__chain {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 3px;
+  height: 44vh;
+  translate: -50% 0;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 252, 240, 0.85) 0px,
+      rgba(214, 206, 188, 0.5) 2px,
+      rgba(90, 84, 74, 0.25) 4px,
+      rgba(255, 252, 240, 0.85) 6px
+    );
+  /* Some para cima: a corrente sai do quadro em vez de terminar num corte. */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 100%);
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .evom-intro__letter {
@@ -133,12 +201,10 @@
   user-select: none;
   -webkit-user-drag: none;
   filter: drop-shadow(0 12px 28px rgba(24, 3, 8, 0.55));
-  will-change: transform, opacity;
 
-  /* Estado inicial: invisível até o scroll trazer a letra.
-     O GSAP assume daqui — nada de estado final "de nascença". */
-  opacity: 0;
-  visibility: hidden;
+  /* A letra nasce VISÍVEL. Quem esconde e revela agora é o pêndulo que a
+     carrega: se os dois escondessem, a queda começaria com a joia invisível
+     dentro de um elemento invisível e o fade contaria duas vezes. */
 }
 
 /* ------------------------------------------------- o verso, escrito no scroll */
@@ -367,7 +433,11 @@
      volta de cada letra. Quem confina o brilho é a máscara abaixo. */
 }
 
-.evom-intro__slot::after {
+/* O reflexo mora no PÊNDULO, não no slot.
+   No slot ele ficava parado enquanto a joia balança, e a faixa de luz
+   descolava da peça — reflexo que não acompanha o objeto denuncia que a luz
+   está pintada. */
+.evom-intro__hang::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -402,9 +472,9 @@
 
 /* Cada letra brilha no seu tempo. O intervalo longo é proposital: reflexo
    frequente vira pisca-pisca de vitrine, não joia. */
-.evom-intro__slot:nth-child(2)::after { animation-delay: 1.1s; }
-.evom-intro__slot:nth-child(3)::after { animation-delay: 2.4s; }
-.evom-intro__slot:nth-child(4)::after { animation-delay: 3.3s; }
+.evom-intro__slot:nth-child(2) .evom-intro__hang::after { animation-delay: 1.1s; }
+.evom-intro__slot:nth-child(3) .evom-intro__hang::after { animation-delay: 2.4s; }
+.evom-intro__slot:nth-child(4) .evom-intro__hang::after { animation-delay: 3.3s; }
 
 /* Move o GRADIENTE, não o elemento.
    Transformar o ::after arrastava a máscara junto — a faixa aparecia com o

@@ -71,6 +71,39 @@ export default function IntroSequence({
   // a versão completa quando estiver revisando a animação.
   const [reduced] = useState(() => respectReducedMotion && readMotionMode() === CALM)
 
+  // Paralaxe de ponteiro sobre as joias.
+  //
+  // Escreve duas variáveis CSS no grupo (-1 a 1) e deixa o CSS decidir quanto
+  // cada letra se desloca. Poderia mover os elementos daqui, mas aí seriam
+  // quatro escritas de layout por evento de mouse; assim é uma só, e a
+  // profundidade diferente de cada slot vem de uma multiplicação no CSS.
+  const parallaxRef = useRef(null)
+  useEffect(() => {
+    const alvo = parallaxRef.current
+    if (!alvo) return
+    // Só com ponteiro fino: num toque não existe "passar o mouse", e o efeito
+    // ficaria preso no último ponto tocado.
+    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return
+
+    let pendente = false
+    let px = 0
+    let py = 0
+    const aplicar = () => {
+      pendente = false
+      alvo.style.setProperty('--px', px.toFixed(3))
+      alvo.style.setProperty('--py', py.toFixed(3))
+    }
+    const onMove = (e) => {
+      px = (e.clientX / window.innerWidth) * 2 - 1
+      py = (e.clientY / window.innerHeight) * 2 - 1
+      if (pendente) return
+      pendente = true
+      requestAnimationFrame(aplicar)
+    }
+    window.addEventListener('pointermove', onMove, { passive: true })
+    return () => window.removeEventListener('pointermove', onMove)
+  }, [])
+
   const rootRef = useRef(null)
   const canvasRef = useRef(null)
   const videoWrapRef = useRef(null)
@@ -79,6 +112,7 @@ export default function IntroSequence({
   const noiseRef = useRef(null)
   const contentRef = useRef(null)
   const lettersRef = useRef([])
+  const hangRefs = useRef([])
   const manifestoRef = useRef(null)
   const manifestoVisualRef = useRef(null)
   const charsRef = useRef([])
@@ -128,11 +162,14 @@ export default function IntroSequence({
     gsap.set(
       [
         ...lettersRef.current,
+        ...hangRefs.current,
         ...charsRef.current,
         manifestoRef.current,
         contentRef.current,
       ].filter(Boolean),
-      { autoAlpha: 1, scale: 1, y: 0, yPercent: 0 }
+      // rotation entra na lista porque o pendulo a usa: sem zerar aqui, o
+      // estado estatico herdaria a joia torta do ultimo quadro animado.
+      { autoAlpha: 1, scale: 1, y: 0, yPercent: 0, rotation: 0 }
     )
     complete()
   }, [reduced, complete])
@@ -254,16 +291,59 @@ export default function IntroSequence({
         // Fim do corte: o vídeo sai de cena e leva o filtro junto.
         tl.set(videoWrapRef.current, { autoAlpha: 0, filter: 'none' }, ACT2_END)
 
-        // ATO 3 — uma letra por sub-trecho, cada uma dentro do seu próprio slot
-        // (o layout já está montado, então crescer não empurra as vizinhas).
-        lettersRef.current.filter(Boolean).forEach((letter, index) => {
+        // ATO 3 — as joias caem e ficam penduradas.
+        //
+        // Antes cada letra simplesmente crescia de 0,38 para 1 com um back.out.
+        // Funcionava e não dizia nada: um pingente de corrente não brota, ele
+        // CAI e balança até parar. A animação passa a ser a do objeto —
+        // primeiro a queda, acelerando; depois o pêndulo, amortecendo — e é
+        // por isso que a mesma sequência de quatro letras deixa de parecer
+        // quatro elementos entrando em cena e passa a parecer alguém pondo uma
+        // corrente na mesa.
+        //
+        // Cada letra tem seu sub-trecho, mas o balanço TRANSBORDA para o
+        // seguinte: enquanto a próxima cai, a anterior ainda oscila. É o que
+        // faz as quatro conversarem em vez de se revezarem.
+        hangRefs.current.filter(Boolean).forEach((hang, index) => {
+          const at = ACT2_END + index * SEG
+          // Ângulo pequeno de propósito. Com o pivô a duas alturas de slot,
+          // cada grau vale uns 9 pixels de deslocamento lateral — corrente de
+          // verdade balança pouco, e passar de dez graus faz a joia atravessar
+          // o vizinho.
+          const lado = index % 2 === 0 ? -1 : 1
+
           tl.fromTo(
-            letter,
-            { scale: 0.38, autoAlpha: 0 },
-            { scale: 1, autoAlpha: 1, duration: SEG, ease: 'back.out(1.6)' },
-            ACT2_END + index * SEG
+            hang,
+            { yPercent: -260, autoAlpha: 0 },
+            {
+              yPercent: 0,
+              autoAlpha: 1,
+              duration: SEG * 0.5,
+              // Queda acelera: gravidade não tem ease-out.
+              ease: 'power2.in',
+            },
+            at
+          )
+
+          // O pêndulo começa no instante em que a queda termina e leva quase
+          // dois sub-trechos para morrer. elastic.out é o que dá as oscilações
+          // decrescentes sem precisar simular física.
+          tl.fromTo(
+            hang,
+            { rotation: lado * 9 },
+            { rotation: 0, duration: SEG * 1.9, ease: 'elastic.out(1, 0.34)' },
+            at + SEG * 0.42
           )
         })
+
+        // As letras cedem o palco quando o verso começa a ser escrito: recuam
+        // um pouco e perdem brilho. Duas coisas disputando o centro da tela ao
+        // mesmo tempo é o que faz uma delas não ser lida.
+        tl.to(
+          '.evom-intro__letters',
+          { scale: 0.9, autoAlpha: 0.72, duration: (OUTRO_START - WRITE_START) * 0.5, ease: 'power2.out' },
+          WRITE_START
+        )
 
         // ------------------------------------------ o verso, escrito no scroll
         const charEls = charsRef.current.filter(Boolean)
@@ -414,20 +494,35 @@ export default function IntroSequence({
         <div ref={flashRef} className="evom-intro__flash" aria-hidden="true" />
 
         <div ref={contentRef} className="evom-intro__content">
-          <div className="evom-intro__letters" aria-hidden="true">
+          <div ref={parallaxRef} className="evom-intro__letters" aria-hidden="true">
             {/* --letter leva o PNG da própria letra para o CSS: é o que
                 permite o brilho se mascarar na forma da joia. */}
             {letters.map((src, index) => (
-              <span className="evom-intro__slot" key={src} style={{ '--letter': `url(${src})` }}>
-                <img
+              <span
+                className="evom-intro__slot"
+                key={src}
+                style={{ '--letter': `url(${src})`, '--depth': 1 + (index % 2) * 0.6 }}
+              >
+                {/* O pêndulo. Ele gira em torno de um ponto MUITO acima da
+                    letra, que é onde a corrente prende — pivô no próprio
+                    pingente daria um giro de hélice, não de peça pendurada. */}
+                <span
                   ref={(el) => {
-                    lettersRef.current[index] = el
+                    hangRefs.current[index] = el
                   }}
-                  className="evom-intro__letter"
-                  src={src}
-                  alt=""
-                  draggable="false"
-                />
+                  className="evom-intro__hang"
+                >
+                  <span className="evom-intro__chain" aria-hidden="true" />
+                  <img
+                    ref={(el) => {
+                      lettersRef.current[index] = el
+                    }}
+                    className="evom-intro__letter"
+                    src={src}
+                    alt=""
+                    draggable="false"
+                  />
+                </span>
               </span>
             ))}
           </div>
