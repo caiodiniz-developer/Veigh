@@ -94,7 +94,11 @@ export default function TimelineSection({ height = '620vh', respectReducedMotion
         trigger: root,
         start: 'top top',
         end: 'bottom bottom',
-        scrub: 0.7,
+        // Amortecimento alto de propósito: a câmera persegue o scroll em vez
+        // de ser arrastada por ele quadro a quadro. É o que tira o serrilhado
+        // do movimento numa cena com 2,5 milhões de triângulos, onde qualquer
+        // quadro perdido aparece como salto.
+        scrub: 1.3,
         invalidateOnRefresh: true,
         onUpdate: (self) => {
           const out = road.setProgress(self.progress)
@@ -125,7 +129,7 @@ export default function TimelineSection({ height = '620vh', respectReducedMotion
           trigger: root,
           start: 'top top',
           end: 'bottom bottom',
-          scrub: 0.6,
+          scrub: 1.1,
           invalidateOnRefresh: true,
         },
       })

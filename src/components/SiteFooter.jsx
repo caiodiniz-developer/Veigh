@@ -1,3 +1,4 @@
+import { FRASE_FINAL } from '../assets.js'
 import './SiteFooter.css'
 
 /** Rodape minimalista: fecha a pagina sem competir com o encerramento. */
@@ -6,7 +7,13 @@ export default function SiteFooter() {
     <footer className="evom-footer">
       <p className="evom-footer__mark">VEIGH</p>
 
-      <p className="evom-footer__note">Eu Venci o Mundo &middot; 2025</p>
+      {/* A assinatura no lugar do nome escrito. O alt carrega o texto, então
+          leitor de tela e busca continuam lendo "Eu Venci o Mundo" — trocar
+          palavra por imagem não pode custar o que a palavra dizia. */}
+      <p className="evom-footer__note">
+        <img className="evom-footer__sign" src={FRASE_FINAL} alt="Eu Venci o Mundo" />
+        <span>2025</span>
+      </p>
 
       <p className="evom-footer__by">
         Desenvolvido com

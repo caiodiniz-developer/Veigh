@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { ERA } from '../assets.js'
+import { GIF_HERO } from '../assets.js'
 import { readMotionMode, CALM } from '../motion.js'
 import './ManifestoSection.css'
 
@@ -18,10 +18,11 @@ gsap.registerPlugin(ScrollTrigger)
  *   0 ──── 0.20 ──── 0.38 ──── 0.56 ──── 0.72 ──────────── 1
  *   │ NÚMEROS │ PALCOS │ MUNDO  │ PRÉDIOS │ abertura       │
  *
- * A escolha de revelar a foto por dentro da tipografia não é só estética: as
- * fotos disponíveis são pequenas (a maior tem 1152px de largura), e vista por
- * dentro de letras a imagem nunca precisa cobrir a viewport em tamanho real —
- * o recorte esconde a limitação em vez de ampliá-la.
+ * A revelação por dentro da tipografia continua, mas o que está lá dentro
+ * mudou: no lugar de um retrato parado, o loop animado do artista. A diferença
+ * importa para a mecânica — um retrato revelado por letras é uma fotografia
+ * exposta, e um loop revelado por letras é uma janela para uma cena que já
+ * estava acontecendo antes de você chegar.
  */
 
 const PHRASES = ['ANTES DOS NÚMEROS.', 'ANTES DOS PALCOS.', 'ANTES DO MUNDO.']
@@ -32,29 +33,17 @@ const FINAL_IN = STEP * 3 // 0.54 — a frase mascarada entra
 const OPEN_START = 0.72 // as letras começam a abrir
 const HOLD = 0.94 // foto aberta, respiro antes de entregar a próxima seção
 
-const PHOTO_ASPECT = 1152 / 2048 // proporção real dos retratos do lote
-
 /**
- * Até onde a abertura vai. Numa viewport landscape a foto NÃO vai a plano
- * cheio: ela para numa janela vertical com a proporção do próprio arquivo.
+ * A abertura vai a PLANO CHEIO.
  *
- * O motivo é a resolução. A 1440x900, um plano cheio exigiria ampliar a foto
- * de 1152px para 2560px de largura (2,2x) e ainda cortaria tudo menos uma tira
- * do meio. Parando na janela, a mesma foto ocupa ~506px de largura vindo de
- * 1152 — reduzindo, portanto nítida — e ainda ganha a leitura de fotografia
- * exposta no escuro, que é o que a seção quer dizer. Em viewport vertical
- * (celular) a proporção já bate e aí sim vai a plano cheio.
- *
- * Função em vez de valor fixo: com invalidateOnRefresh o GSAP reavalia no
- * resize, então a janela acompanha a tela.
+ * A versão anterior parava numa janela vertical, e a razão era resolução: os
+ * retratos tinham 1152px de largura, e cobrir 1440x900 exigiria ampliá-los 2,2
+ * vezes. Com o loop no lugar do retrato o argumento cai. Grão e leve perda de
+ * definição são a gramática de um vídeo em movimento — ninguém procura borda
+ * nítida em imagem que se move — e o que estava sendo protegido custava
+ * justamente o efeito que a seção quer: a cena tomando a tela inteira.
  */
-const sideInset = () => {
-  if (typeof window === 'undefined') return 0
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  if (vw / vh <= PHOTO_ASPECT * 1.2) return 0
-  return Math.max(0, ((vw - vh * PHOTO_ASPECT) / 2 / vw) * 100)
-}
+const sideInset = () => 0
 
 // A abertura é uma íris vertical: a fenda inicial já tem a largura final da
 // janela, então as letras "abrem" de cima pra baixo em vez de crescer nos
@@ -64,7 +53,7 @@ const closedInset = () => `inset(44% ${sideInset().toFixed(2)}% 44% ${sideInset(
 const openInset = () => `inset(0% ${sideInset().toFixed(2)}% 0% ${sideInset().toFixed(2)}%)`
 
 export default function ManifestoSection({
-  photo = ERA.dosPredios[2], // a de maior resolução do lote (1152x2048)
+  photo = GIF_HERO,
   height = '500vh',
   respectReducedMotion = true,
 }) {
@@ -181,7 +170,7 @@ export default function ManifestoSection({
       aria-label="Antes dos prédios"
     >
       <div className="evom-manifesto__stage">
-        {/* A fotografia em plano cheio, revelada pela abertura das letras. */}
+        {/* O loop em plano cheio, revelado pela abertura das letras. */}
         <div
           ref={revealRef}
           className="evom-manifesto__reveal"
@@ -203,7 +192,7 @@ export default function ManifestoSection({
             </p>
           ))}
 
-          {/* A frase-janela: o fill é a própria fotografia. */}
+          {/* A frase-janela: o fill é o próprio loop, rodando dentro das letras. */}
           <p
             ref={finalRef}
             className="evom-manifesto__phrase evom-manifesto__phrase--masked"

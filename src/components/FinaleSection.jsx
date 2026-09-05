@@ -1,23 +1,29 @@
 import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { VIDEOS } from '../assets.js'
+import { GIF_HERO, FRASE_FINAL } from '../assets.js'
 import './FinaleSection.css'
 
 gsap.registerPlugin(ScrollTrigger)
 
 /**
- * Encerramento — fecha a narrativa aberta na intro.
+ * Encerramento — o loop em plano cheio e a assinatura no meio dele.
  *
- * O vídeo do Veigh vai escurecendo enquanto as quatro frases passam, e no fim
- * fica só a assinatura e o convite. É o único ponto do site com CTA: colocá-lo
- * antes quebraria a leitura de filme que o resto sustenta.
+ * A versão anterior tinha quatro frases passando ("DOS PRÉDIOS." / "PARA O
+ * BRASIL." / …), a assinatura tipográfica e um CTA. Saiu tudo. O site inteiro
+ * já é a explicação; um fim que explica de novo é um fim que não confia no que
+ * veio antes. Sobra a imagem e a marca — e nada depois, o que é o que faz o
+ * silêncio ser o encerramento em vez de uma pausa.
+ *
+ * O loop é o MESMO da abertura do manifesto. Fechar com o material que abriu
+ * transforma a página num laço em vez de uma lista de capítulos: o primeiro e
+ * o último quadro são o mesmo, e o que mudou no meio foi você.
+ *
+ * A assinatura entra com o scroll, não com um timer. É o último gesto que a
+ * página pede, e pedi-lo mantém a mesma gramática das outras treze seções.
  */
-const LINES = ['DOS PRÉDIOS.', 'PARA O BRASIL.', 'DO BRASIL.', 'PARA O MUNDO.']
-
-export default function FinaleSection({ height = '460vh' }) {
+export default function FinaleSection({ height = '260vh' }) {
   const rootRef = useRef(null)
-  const linesRef = useRef([])
 
   useEffect(() => {
     const root = rootRef.current
@@ -30,39 +36,31 @@ export default function FinaleSection({ height = '460vh' }) {
           trigger: root,
           start: 'top top',
           end: 'bottom bottom',
-          scrub: 0.6,
+          scrub: 0.7,
           invalidateOnRefresh: true,
         },
       })
+      tl.to({}, { duration: 1 }, 0) // espaçador: trava a duração total em 1
 
-      // A imagem escurece devagar ao longo de todo o percurso.
+      // O escurecimento do loop e a entrada da marca são o mesmo movimento: a
+      // imagem recua para a marca poder existir sobre ela.
       tl.fromTo(
         root.querySelector('.evom-finale__scrim'),
-        { autoAlpha: 0.25 },
-        { autoAlpha: 0.92, duration: 0.78 },
+        { autoAlpha: 0.15 },
+        { autoAlpha: 0.72, duration: 0.6 },
         0
       )
 
-      // Uma frase por vez, cada uma ocupando a tela sozinha.
-      const seg = 0.17
-      linesRef.current.filter(Boolean).forEach((el, i) => {
-        tl.fromTo(el, { autoAlpha: 0, y: 40 }, { autoAlpha: 1, y: 0, duration: seg * 0.4 }, i * seg)
-        tl.to(el, { autoAlpha: 0, y: -40, duration: seg * 0.35 }, i * seg + seg * 0.6)
-      })
+      tl.fromTo(
+        root.querySelector('.evom-finale__mark'),
+        { autoAlpha: 0, scale: 0.82, y: 30 },
+        { autoAlpha: 1, scale: 1, y: 0, duration: 0.34, ease: 'power2.out' },
+        0.22
+      )
 
-      // Assinatura e CTA, depois de uma pausa visual.
-      tl.fromTo(
-        root.querySelector('.evom-finale__signature'),
-        { autoAlpha: 0, y: 40 },
-        { autoAlpha: 1, y: 0, duration: 0.12 },
-        0.78
-      )
-      tl.fromTo(
-        root.querySelector('.evom-finale__cta'),
-        { autoAlpha: 0, y: 22 },
-        { autoAlpha: 1, y: 0, duration: 0.08 },
-        0.88
-      )
+      // Respiro no fim: a marca ganha um leve avanço enquanto a seção termina,
+      // então a última coisa que a página faz é chegar mais perto.
+      tl.to(root.querySelector('.evom-finale__mark'), { scale: 1.06, duration: 0.4 }, 0.6)
     }, root)
 
     return () => ctx.revert()
@@ -71,47 +69,12 @@ export default function FinaleSection({ height = '460vh' }) {
   return (
     <section ref={rootRef} className="evom-finale" style={{ height }} aria-label="Eu Venci o Mundo">
       <div className="evom-finale__stage">
-        <video
-          className="evom-finale__video"
-          src={VIDEOS.sessao1}
-          poster={VIDEOS.sessao1Poster}
-          muted
-          loop
-          playsInline
-          autoPlay
-          preload="metadata"
-          aria-hidden="true"
-        />
+        {/* WebP animado, então <img> e não canvas nem background de WebGL:
+            como textura ele congelaria no primeiro quadro. */}
+        <img className="evom-finale__loop" src={GIF_HERO} alt="" aria-hidden="true" />
         <div className="evom-finale__scrim" aria-hidden="true" />
 
-        <div className="evom-finale__lines">
-          {LINES.map((line, i) => (
-            <p
-              className="evom-finale__line"
-              key={line}
-              ref={(el) => {
-                linesRef.current[i] = el
-              }}
-            >
-              {line}
-            </p>
-          ))}
-        </div>
-
-        <div className="evom-finale__signature">
-          <p className="evom-finale__name">VEIGH</p>
-          <p className="evom-finale__album">
-            EU VENCI
-            <br />O MUNDO.
-          </p>
-        </div>
-
-        {/* Sem link inventado: o destino real (Spotify, Apple) precisa vir de
-            você. O botão existe e é claramente clicável — só falta o href. */}
-        <p className="evom-finale__cta">
-          <span>OUÇA AGORA</span>
-          <span aria-hidden="true">&#8599;</span>
-        </p>
+        <img className="evom-finale__mark" src={FRASE_FINAL} alt="Eu Venci o Mundo" />
       </div>
     </section>
   )

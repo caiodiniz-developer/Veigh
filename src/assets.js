@@ -23,6 +23,28 @@ export const VIDEOS = {
   sessao1Poster: '/videos/sessao1-poster.jpg',
 }
 
+/**
+ * O loop animado do artista — WebP animado, 800x800, 198 quadros a 60ms
+ * (~12s de volta). Abre o manifesto por dentro da tipografia e volta a plano
+ * cheio no encerramento.
+ *
+ * É animado, então tem que viver num <img>: como textura de WebGL ou como
+ * background-image de um canvas ele congelaria no primeiro quadro.
+ */
+export const GIF_HERO = '/gif-hero.webp'
+
+/**
+ * A assinatura "evom" manuscrita, com alpha.
+ *
+ * ATENÇÃO ao trocar: o arquivo original veio em 100x100 pixels. Para uma marca
+ * que fecha o site no meio da tela isso é pequeno demais — 100px esticados
+ * para 600 é seis vezes de ampliação, e nenhuma interpolação inventa a borda
+ * que não foi exportada. O -2x aqui é um upscale lanczos do próprio arquivo:
+ * ajuda, mas não substitui um export grande. O ideal é um SVG.
+ */
+export const FRASE_FINAL = '/frase-final-2x.webp'
+export const FRASE_FINAL_FONTE = '/frase-final.webp'
+
 /** Recorte do artista em corpo inteiro, com alpha. Usado no palco. */
 export const VEIGH_CUTOUT = '/veigh-sem-fundo.png'
 
@@ -100,6 +122,8 @@ export const TRACKLIST = [
 export const ALL_ASSETS = [
   ...Object.values(VIDEOS),
   VEIGH_CUTOUT,
+  GIF_HERO,
+  FRASE_FINAL,
   ...PENDANTS,
   ...Object.values(CAPAS),
   ...ERA.dosPredios,

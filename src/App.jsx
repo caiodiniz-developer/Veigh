@@ -18,7 +18,6 @@ import ClipsSection from './components/ClipsSection.jsx'
 import ShowsSection from './components/ShowsSection.jsx'
 import WorldSection from './components/WorldSection.jsx'
 import FinaleSection from './components/FinaleSection.jsx'
-import CreditsRoll from './components/CreditsRoll.jsx'
 import SiteFooter from './components/SiteFooter.jsx'
 
 export default function App() {
@@ -87,12 +86,8 @@ export default function App() {
         {/* Pausa final: o respiro antes do encerramento. */}
         <Interlude text="Dos prédios até aqui." />
 
-        {/* Encerramento. */}
+        {/* Encerramento: o loop em plano cheio e a assinatura no meio dele. */}
         <FinaleSection />
-
-        {/* Creditos subindo, como no fim de um filme. */}
-        <CreditsRoll />
-
         <SiteFooter />
       </main>
     </>

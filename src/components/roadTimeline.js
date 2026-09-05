@@ -395,7 +395,13 @@ function makeEasing(gates) {
     for (const g of gates) {
       const d = Math.abs(p - g)
       // Poço de desaceleração em torno do marco.
-      slow += Math.exp(-(d * d) / 0.0016) * 0.6
+      //
+      // Alargado e rebaixado em relação à primeira calibragem (0,0016 e 0,6).
+      // Um poço estreito e fundo freia e solta a câmera em poucos pixels de
+      // rolagem, e o que se sente não é um documentário desacelerando: é um
+      // tranco. Mais largo, a mesma quantidade de atenção no marco chega
+      // distribuída ao longo do trecho inteiro.
+      slow += Math.exp(-(d * d) / 0.0052) * 0.42
     }
     return slow
   }
@@ -672,8 +678,11 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
 
   entries.forEach((e, i) => {
     if (!e.figuras || !e.figuras.length) return
-    const lado = i % 2 === 0 ? -1 : 1
     e.figuras.forEach((url, k) => {
+      // Uma de cada lado da rua. Com as duas no mesmo acostamento, metade do
+      // quadro ficava vazia e o par lia como um bloco só; separadas, a câmera
+      // passa ENTRE elas e o corredor da rua vira o eixo da composição.
+      const lado = k === 0 ? -1 : 1
       const tex = figLoader.load(url)
       tex.colorSpace = THREE.SRGBColorSpace
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy()
@@ -700,8 +709,9 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
       // eixo TRANSVERSAL eles ficam na mesma profundidade, entram no quadro
       // juntos e saem juntos. O de trás recua um pouco na diagonal para os
       // dois não se encavalarem.
-      const z = marcoZ(i) + 4 - k * 1.1
-      const x = lado * (ROAD_W / 2 + 2.3 + k * 3.0)
+      // Mesma profundidade nas duas: entram e saem juntas do quadro.
+      const z = marcoZ(i) + 4
+      const x = lado * (ROAD_W / 2 + 2.4)
       plano.position.set(x, alt / 2, z)
       plano.rotation.y = lado * 0.22 // virado de leve para a pista
       scene.add(plano)
@@ -730,13 +740,24 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
   let descartado = false
 
   const montarCenario = async () => {
+    // O catch avisa em vez de engolir.
+    //
+    // A primeira versão fazia .catch(() => null) mudo, e quando o carro.glb
+    // sumiu da pasta (renomeado) a cena simplesmente montou sem carro: nenhum
+    // erro no console, nenhuma pista. Um asset que falta é um problema de
+    // conteúdo, não uma condição excepcional — a cena continua de pé sem ele,
+    // mas alguém precisa ficar sabendo.
+    const carregar = (url, opcoes, nome) =>
+      url
+        ? carregarModelo(url, opcoes).catch((e) => {
+            console.warn(`[trajetoria] modelo "${nome}" não carregou (${url}):`, e?.message || e)
+            return null
+          })
+        : Promise.resolve(null)
+
     const [predio, carro] = await Promise.all([
-      modelos.predio
-        ? carregarModelo(modelos.predio, { altura: 21 }).catch(() => null)
-        : Promise.resolve(null),
-      modelos.carro
-        ? carregarModelo(modelos.carro, { altura: 1.45, alinharZ: true }).catch(() => null)
-        : Promise.resolve(null),
+      carregar(modelos.predio, { altura: 21 }, 'predio'),
+      carregar(modelos.carro, { altura: 1.45, alinharZ: true }, 'carro'),
     ])
     if (descartado) return
 
