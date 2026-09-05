@@ -6,47 +6,37 @@
 
   position: relative;
   isolation: isolate;
-  padding: 16vh 5vw 14vh;
+  padding: 14vh 5vw 12vh;
   background: var(--evom-ink);
   color: var(--evom-bone);
   overflow: clip;
 }
 
-/* Fundo reativo: a própria capa, ampliada e desfocada. Como só existe uma capa
-   de 447px, o blur pesado é o que permite usá-la em plano cheio sem que a
-   baixa resolução apareça — o desfoque destrói justamente a escala em que o
-   upscale seria visível. */
+/* Fundo: a própria capa, ampliada e desfocada. O blur pesado é o que permite
+   usar uma capa de 447px em plano cheio — ele destrói exatamente a escala em
+   que a baixa resolução apareceria. */
 .evom-player__bg {
   position: absolute;
   inset: -12%;
   z-index: -2;
   background-size: cover;
   background-position: center;
-  filter: blur(64px) saturate(1.25);
-  opacity: 0.5;
-  transition: background-image 600ms ease;
+  filter: blur(72px) saturate(1.3);
+  opacity: 0.45;
 }
 
-.evom-player__bg-tint {
+.evom-player__tint {
   position: absolute;
   inset: 0;
   z-index: -1;
-  /* A posição e a força da luz vêm da faixa selecionada (custom properties
-     escritas pelo componente). Trocar de música move o foco de luz da seção
-     inteira — sem trocar de matiz, para não sair da paleta vinho/preto. */
   background:
-    radial-gradient(
-      ellipse at var(--evom-light-x, 50%) var(--evom-light-y, 40%),
-      rgba(196, 30, 58, var(--evom-light-i, 0.4)) 0%,
-      transparent 66%
-    ),
+    radial-gradient(ellipse at 50% 34%, rgba(196, 30, 58, 0.28) 0%, transparent 66%),
     linear-gradient(180deg, var(--evom-ink) 0%, rgba(10, 3, 5, 0.72) 45%, var(--evom-ink) 100%);
-  transition: background 900ms ease;
 }
 
 .evom-player__head {
   text-align: center;
-  margin-bottom: clamp(36px, 7vh, 78px);
+  margin-bottom: clamp(34px, 7vh, 76px);
 }
 
 .evom-player__eyebrow {
@@ -67,210 +57,224 @@
   line-height: 1;
 }
 
-/* ------------------------------------------------------------- cover flow */
+/* =========================================================== a vitrola == */
 
-.evom-player__stage {
-  position: relative;
-  height: clamp(300px, 46vh, 470px);
-  perspective: 1400px;
-  cursor: grab;
-  touch-action: pan-y; /* deixa a página rolar no vertical e o carrossel pegar o horizontal */
-  outline: none;
-}
-
-.evom-player__stage:active {
-  cursor: grabbing;
-}
-
-.evom-player__stage:focus-visible {
-  outline: 1px solid rgba(196, 30, 58, 0.8);
-  outline-offset: 12px;
-  border-radius: 4px;
-}
-
-.evom-player__track {
-  position: absolute;
-  inset: 0;
-  transform-style: preserve-3d;
+.evom-player__deck {
   display: grid;
-  place-items: center;
-}
-
-.evom-player__card {
-  grid-area: 1 / 1;
-  position: relative;
-  width: clamp(190px, 25vw, 310px);
-  aspect-ratio: 1 / 1;
-  transform-style: preserve-3d;
-  background: #14060a;
-  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.7);
-  cursor: pointer;
-  will-change: transform, opacity;
-  opacity: 0;
-  visibility: hidden;
-}
-
-.evom-player__card img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  user-select: none;
-  -webkit-user-drag: none;
-}
-
-/* A capa é a mesma nas 16 faixas — quem diferencia o card é a tipografia.
-   Inventar arte por faixa seria inventar material que não existe. */
-.evom-player__card-face {
-  position: absolute;
-  inset: auto 0 0 0;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 30px 14px 12px;
-  background: linear-gradient(180deg, transparent 0%, rgba(6, 2, 4, 0.9) 62%);
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-}
-
-.evom-player__card-n {
-  font-size: 0.72rem;
-  letter-spacing: 0.16em;
-  color: var(--evom-ruby);
-}
-
-.evom-player__card-title {
-  font-size: clamp(0.76rem, 1.1vw, 0.95rem);
-  letter-spacing: 0.02em;
-  color: var(--evom-bone);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.evom-player__card.is-current {
-  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(196, 30, 58, 0.5);
-}
-
-.evom-player__drag-hint {
-  position: absolute;
-  left: 50%;
-  bottom: -6px;
-  transform: translateX(-50%);
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: 0.64rem;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: rgba(245, 239, 230, 0.32);
-  pointer-events: none;
-}
-
-/* ------------------------------------------------------ o card de vidro */
-
-.evom-player__card-glass {
-  --tilt-x: 0deg;
-  --tilt-y: 0deg;
-  --gloss-x: 50%;
-  --gloss-y: 0%;
-
-  position: relative;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: clamp(18px, 3vw, 38px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
-  width: min(94vw, 780px);
-  margin: clamp(44px, 9vh, 96px) auto 0;
-  padding: clamp(18px, 2.6vh, 26px);
-  border-radius: 20px;
-
-  /* Vidro: translúcido sobre a capa desfocada da seção, com borda clara em
-     cima (onde a luz bateria) e escura embaixo. */
-  background: linear-gradient(
-    155deg,
-    rgba(255, 246, 231, 0.11) 0%,
-    rgba(255, 246, 231, 0.04) 38%,
-    rgba(10, 3, 5, 0.34) 100%
-  );
-  border: 1px solid rgba(255, 246, 231, 0.16);
-  border-bottom-color: rgba(10, 3, 5, 0.5);
-  backdrop-filter: blur(26px) saturate(1.3);
-  -webkit-backdrop-filter: blur(26px) saturate(1.3);
-  box-shadow:
-    0 40px 90px rgba(0, 0, 0, 0.62),
-    inset 0 1px 0 rgba(255, 246, 231, 0.22);
-
-  transform: perspective(1100px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
-  transform-style: preserve-3d;
-  transition: transform 420ms cubic-bezier(0.22, 0.9, 0.3, 1), box-shadow 420ms ease;
-  will-change: transform;
+  gap: clamp(24px, 5vw, 80px);
+  width: min(96vw, 1240px);
+  margin: 0 auto;
 }
 
-.evom-player__card-glass:hover {
-  box-shadow:
-    0 58px 120px rgba(0, 0, 0, 0.72),
-    inset 0 1px 0 rgba(255, 246, 231, 0.3);
-}
-
-/* Reflexo especular seguindo o cursor. É o que faz a peça parecer vidro de
-   verdade em vez de um retângulo translúcido. */
-.evom-player__gloss {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: radial-gradient(
-    380px circle at var(--gloss-x) var(--gloss-y),
-    rgba(255, 246, 231, 0.16) 0%,
-    transparent 62%
-  );
-  opacity: 0;
-  transition: opacity 320ms ease;
-}
-
-.evom-player__card-glass:hover .evom-player__gloss {
-  opacity: 1;
-}
-
-.evom-player__art {
+.evom-player__platter {
   position: relative;
-  width: clamp(92px, 13vw, 152px);
+  justify-self: center;
+  width: min(44vw, 470px);
   aspect-ratio: 1 / 1;
-  border-radius: 12px;
-  overflow: hidden;
-  transform: translateZ(38px); /* o disco flutua acima do vidro no tilt */
-  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.6);
 }
 
-.evom-player__art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.evom-player__art-sheen {
+.evom-player__disc {
   position: absolute;
   inset: 0;
-  background: linear-gradient(140deg, rgba(255, 246, 231, 0.3) 0%, transparent 44%);
-  mix-blend-mode: overlay;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #17161a 0%, #0b0a0d 62%, #050406 100%);
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.8), inset 0 0 60px rgba(0, 0, 0, 0.9);
 }
 
-.evom-player__info {
+.evom-player__disc.is-spinning {
+  /* 33⅓ rpm dá 1,8s por volta. Usar a rotação real em vez de um número
+     arbitrário é o que faz o movimento parecer certo sem ninguém saber por quê. */
+  animation: evom-spin 1.8s linear infinite;
+}
+
+@keyframes evom-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Sulcos. repeating-radial-gradient desenha centenas de anéis com precisão
+   subpixel — um bitmap serrilharia ao girar. */
+.evom-player__grooves {
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  background: repeating-radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0.045) 0px,
+    rgba(255, 255, 255, 0.045) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  /* A área lisa entre o fim dos sulcos e a bolacha. */
+  mask-image: radial-gradient(circle at 50% 50%, transparent 0 33%, #000 34%, #000 100%);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 0 33%, #000 34%, #000 100%);
+}
+
+/* A capa como bolacha central: é literalmente o lugar dela num vinil. */
+.evom-player__label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34%;
+  aspect-ratio: 1 / 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.8);
+}
+
+.evom-player__spindle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2.4%;
+  aspect-ratio: 1 / 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: #d8d2c8;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.7), inset 0 -1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Reflexo parado enquanto o disco gira por baixo. É a diferença entre luz
+   incidindo no vinil e mancha pintada nele. */
+.evom-player__sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(
+    from 210deg at 50% 50%,
+    transparent 0deg,
+    rgba(255, 246, 231, 0.11) 26deg,
+    transparent 62deg,
+    transparent 190deg,
+    rgba(255, 246, 231, 0.06) 214deg,
+    transparent 250deg
+  );
+}
+
+/* ------------------------------------------------------------- o braço */
+
+/* O poste do braço. Fica FORA do elemento que gira: o pivô de uma vitrola é a
+   única parte do conjunto que não se move, e é ele que dá o ponto de apoio
+   visual para o resto girar em torno de alguma coisa. */
+.evom-player__post {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  width: 13%;
+  aspect-ratio: 1 / 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #4a4a52 0%, #232329 46%, #0c0c10 100%);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.8), inset 0 -2px 6px rgba(0, 0, 0, 0.9);
+}
+
+/* O braço.
+
+   Duas versões erradas antes desta. Na primeira ele tinha 46% de largura e a
+   agulha ia parar dentro da tracklist. Na segunda o ângulo era negativo — e em
+   CSS rotação negativa é anti-horária, ou seja, empurrava a ponta para FORA do
+   disco em vez de para dentro. A medição confirmou: cápsula a 280px do eixo,
+   num disco de raio 235.
+
+   Agora a geometria vem do objeto real. Num toca-discos o braço tem cerca de
+   230mm de comprimento efetivo, o pivô fica a 212mm do eixo e o disco tem
+   150mm de raio. Normalizando pelo raio (que aqui é 50% da caixa):
+
+     comprimento   1,533 R  ->  76,6% da caixa (até o centro da cápsula)
+     pivô          1,413 R  ->  70,6% da caixa de distância do eixo
+
+   E 70,6% é quase exatamente a diagonal até o canto da caixa (70,7%). Então o
+   pivô assenta no canto superior direito do prato — que é, não por acaso,
+   onde fica o poste de uma vitrola de verdade. */
+.evom-player__arm {
+  position: absolute;
+  top: 0;
+  left: 95.5%; /* + meia largura (4,5%) = pivô exatamente em (100%, 0) */
+  width: 9%;
+  /* A cápsula fica no fim da haste e o centro dela é o ponto que lê o sulco:
+     80% x 0,955 = 76,4% — o comprimento efetivo calculado acima. */
+  height: 80%;
+  transform-origin: 50% 0;
+  rotate: 7deg;
+  pointer-events: none;
+}
+
+/* O contrapeso fica atrás do pivô, do lado oposto à agulha — é o que equilibra
+   um braço de verdade e o que denuncia a silhueta como braço. */
+.evom-player__arm-weight {
+  position: absolute;
+  top: -9%;
+  left: 50%;
+  width: 210%;
+  height: 7.5%;
+  translate: -50% 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #3f3f46 0%, #1d1d22 60%, #0b0b0f 100%);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.7);
+}
+
+.evom-player__arm-rod {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 4px;
+  height: 93%;
+  translate: -50% 0;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #d2cfc9 0%, #8b8984 46%, #4a4945 100%);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7);
+}
+
+/* A cápsula. O ângulo de offset existe em braços reais: a cabeça é montada
+   torta em relação à haste para que a agulha caia tangente ao sulco. */
+.evom-player__arm-head {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 150%;
+  height: 9%;
+  translate: -50% 0;
+  rotate: -20deg;
+  border-radius: 2px 2px 1px 1px;
+  background: linear-gradient(180deg, #2a2a30 0%, #131317 68%, var(--evom-ruby) 100%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.8), 0 0 14px rgba(196, 30, 58, 0.5);
+}
+
+/* ========================================================= a tracklist == */
+
+.evom-player__side {
   min-width: 0;
-  transform: translateZ(18px);
+}
+
+.evom-player__now {
+  padding-bottom: clamp(16px, 3vh, 28px);
+  margin-bottom: clamp(14px, 2.6vh, 24px);
+  border-bottom: 1px solid rgba(245, 239, 230, 0.14);
+}
+
+.evom-player__now-n {
+  margin: 0 0 6px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.3em;
+  color: var(--evom-ruby);
+  font-variant-numeric: tabular-nums;
 }
 
 .evom-player__now-title {
-  margin: 0 0 5px;
+  margin: 0 0 8px;
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: clamp(1.05rem, 2.1vw, 1.62rem);
-  letter-spacing: -0.015em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 500;
+  font-size: clamp(1.5rem, 3.4vw, 2.8rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
 }
 
 .evom-player__now-meta {
-  margin: 0 0 14px;
+  margin: 0;
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 0.66rem;
   letter-spacing: 0.2em;
@@ -278,155 +282,146 @@
   color: rgba(245, 239, 230, 0.45);
 }
 
-/* ------------------------------------------------------------- waveform */
-
-.evom-player__wave {
+.evom-player__actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: clamp(14px, 2.4vh, 22px);
+}
+
+.evom-player__spin,
+.evom-player__go {
+  display: inline-flex;
   align-items: center;
-  gap: 2px;
-  height: 34px;
-  margin-bottom: 12px;
-}
-
-.evom-player__wave-bar {
-  flex: 1;
-  min-width: 0;
-  height: calc(var(--amp) * 100%);
-  border-radius: 1px;
-  background: rgba(245, 239, 230, 0.2);
-  transform-origin: 50% 50%;
-  transition: background 260ms ease;
-}
-
-.evom-player__wave-bar.is-past {
-  background: linear-gradient(180deg, #e8c77e, var(--evom-ruby));
-}
-
-/* Só vibra enquanto toca, e cada coluna com a sua fase — barras em uníssono
-   leem como barra de carregamento, não como áudio. */
-.evom-player__card-glass.is-playing .evom-player__wave-bar {
-  animation: evom-wave 900ms ease-in-out infinite alternate;
-  animation-delay: calc(var(--i) * -37ms);
-}
-
-@keyframes evom-wave {
-  from { transform: scaleY(0.72); }
-  to   { transform: scaleY(1.12); }
-}
-
-.evom-player__controls {
-  display: flex;
-  align-items: center;
-  gap: clamp(10px, 1.6vw, 18px);
-  margin-top: 14px;
-}
-
-.evom-player__nav,
-.evom-player__play {
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(245, 239, 230, 0.2);
-  background: transparent;
-  color: var(--evom-bone);
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-decoration: none;
   cursor: pointer;
-  border-radius: 50%;
-  transition: transform 200ms ease, border-color 200ms ease, background 200ms ease;
+  transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
 }
 
-.evom-player__nav {
-  width: 38px;
-  height: 38px;
-  font-size: 1.3rem;
-  line-height: 1;
+.evom-player__spin {
+  border: 1px solid rgba(245, 239, 230, 0.24);
+  background: transparent;
+  color: rgba(245, 239, 230, 0.7);
 }
 
-.evom-player__play {
-  width: 54px;
-  height: 54px;
-  font-size: 0.9rem;
-  background: var(--evom-ruby);
-  border-color: transparent;
-}
-
-.evom-player__nav:hover:not(:disabled),
-.evom-player__play:hover {
-  transform: scale(1.07);
+.evom-player__spin:hover {
+  color: #fff8ec;
   border-color: rgba(196, 30, 58, 0.8);
 }
 
-.evom-player__nav:disabled {
-  opacity: 0.28;
-  cursor: default;
+.evom-player__go {
+  border: 1px solid transparent;
+  background: var(--evom-ruby);
+  color: #fff;
 }
 
-.evom-player__progress {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: 0.68rem;
-  color: rgba(245, 239, 230, 0.5);
-  font-variant-numeric: tabular-nums;
+.evom-player__go:hover {
+  background: #d92746;
 }
 
-.evom-player__rail {
+/* A lista rola dentro dela mesma: 16 faixas empurrariam a seção para 200vh e
+   quebrariam o ritmo de um capítulo por tela. */
+.evom-player__list {
+  /* position: relative é obrigatório aqui. offsetTop de cada item é medido a
+     partir do ancestral posicionado mais próximo — sem isso a conta usava a
+     seção inteira como referência e a lista rolava para o fim em vez de
+     centralizar a faixa ativa. */
   position: relative;
-  flex: 1;
-  height: 2px;
-  background: rgba(245, 239, 230, 0.16);
-  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: clamp(220px, 34vh, 340px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(196, 30, 58, 0.6) transparent;
+  outline: none;
 }
 
-/* scaleX em vez de width: a barra atualiza a cada frame enquanto toca, e
-   width dispararia layout 60 vezes por segundo. */
-.evom-player__fill {
-  position: absolute;
-  inset: 0;
-  transform-origin: 0 50%;
-  background: linear-gradient(90deg, var(--evom-ruby), #e8c77e);
-  will-change: transform;
+.evom-player__list:focus-visible {
+  outline: 1px solid rgba(196, 30, 58, 0.8);
+  outline-offset: 8px;
+  border-radius: 3px;
+}
+
+.evom-player__track {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  width: 100%;
+  padding: 9px 4px;
+  border: none;
+  border-bottom: 1px solid rgba(245, 239, 230, 0.07);
+  background: transparent;
+  color: rgba(245, 239, 230, 0.55);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: clamp(0.86rem, 1.2vw, 1rem);
+  text-align: left;
+  cursor: pointer;
+  transition: color 200ms ease, padding-left 260ms ease;
+}
+
+.evom-player__track:hover {
+  color: rgba(245, 239, 230, 0.9);
+  padding-left: 12px;
+}
+
+/* A faixa no braço fica marcada pela cor e por um deslocamento — o mesmo
+   sulco que a agulha está lendo. */
+.evom-player__track.is-on {
+  color: #fff8ec;
+  padding-left: 12px;
+}
+
+.evom-player__track.is-on .evom-player__track-n {
+  color: var(--evom-ruby);
+}
+
+.evom-player__track-n {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  color: rgba(245, 239, 230, 0.32);
+}
+
+.evom-player__track-name {
+  flex: 1;
+  min-width: 0;
 }
 
 .evom-player__note {
-  margin: 22px auto 0;
-  max-width: 46ch;
+  margin: clamp(30px, 6vh, 64px) auto 0;
   text-align: center;
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 0.72rem;
-  line-height: 1.55;
-  color: rgba(245, 239, 230, 0.38);
 }
 
-.evom-player__reveal {
-  opacity: 1;
+.evom-player__note a {
+  color: rgba(245, 239, 230, 0.5);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(196, 30, 58, 0.5);
+  padding-bottom: 2px;
+}
+
+.evom-player__note a:hover {
+  color: #fff8ec;
 }
 
 /* ---------------------------------------------------------------- mobile */
 
-@media (max-width: 760px) {
-  /* Sem hover no toque, o tilt não faz sentido: o card vira uma peça reta,
-     empilhada, e o brilho especular sai de cena. */
-  .evom-player__card-glass {
+@media (max-width: 860px) {
+  .evom-player__deck {
     grid-template-columns: 1fr;
-    justify-items: center;
-    text-align: center;
-    transform: none;
+    gap: clamp(20px, 4vh, 40px);
   }
 
-  .evom-player__art {
-    transform: none;
-  }
-
-  .evom-player__info {
-    width: 100%;
-    transform: none;
-  }
-
-  .evom-player__gloss {
-    display: none;
-  }
-
-  .evom-player__controls {
-    justify-content: center;
+  .evom-player__platter {
+    width: min(74vw, 340px);
   }
 }
