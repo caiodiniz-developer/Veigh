@@ -102,60 +102,95 @@ export default function TimelineSection({ height = '620vh', respectReducedMotion
         invalidateOnRefresh: true,
         onUpdate: (self) => {
           const out = road.setProgress(self.progress)
-          if (out) root.style.setProperty('--evom-era-light', out.light)
+          if (!out) return
+          root.style.setProperty('--evom-era-light', out.light)
+
+          // Cada legenda vai para o lado da sua figura.
+          //
+          // O card continua sendo HTML por cima do canvas — tipografia nítida
+          // vale mais que texto em textura — mas deixa de morar num canto
+          // fixo. A cena devolve a posição de tela de cada figura e o bloco de
+          // texto se ancora nela.
+          //
+          // left/top e não transform: o GSAP já usa transform para animar a
+          // entrada e a saída de cada card, e escrever nos dois lugares faria
+          // um sobrescrever o outro a cada quadro.
+          const cards = cardsRef.current
+          for (const m of out.marcas || []) {
+            const card = cards[m.era]
+            if (!card) continue
+            if (m.dentro) {
+              card.style.left = m.x + 'px'
+              card.style.top = m.y + 'px'
+            } else {
+              // Fora do quadro: volta para a âncora de repouso do CSS.
+              // Limpando SÓ left e top — removeAttribute('style') apagaria
+              // junto opacity, visibility e transform, que são do GSAP, e o
+              // card piscaria a cada quadro em que a figura saísse de cena.
+              card.style.left = ''
+              card.style.top = ''
+            }
+          }
         },
         // O tráfego e as janelas correm no tempo, então a cena precisa de
         // loop — mas só enquanto a estrada está na tela.
         onToggle: (self) => (self.isActive ? road.start() : road.stop()),
       })
 
+      montarLegendas(scene.janelas)
       road.setProgress(st.progress)
       if (st.isActive) road.start()
       ScrollTrigger.refresh()
     })
 
-    const ctx = gsap.context(() => {
-      // UMA timeline para todas as legendas, com duração travada em 1.
-      //
-      // A versão anterior criava uma timeline por card. Cada timeline tem a
-      // duração definida pelo próprio conteúdo — a do primeiro card terminava
-      // em 0.29, a do último em 1.09 — e o scrub estica CADA uma sobre o
-      // scroll inteiro. Resultado: as legendas desalinhavam do ano na pista e,
-      // no fim, as cinco apareciam juntas. O espaçador abaixo fixa a duração
-      // em exatamente 1, então posição na timeline = progresso do scroll.
-      const tl = gsap.timeline({
-        defaults: { ease: 'none' },
-        scrollTrigger: {
-          trigger: root,
-          start: 'top top',
-          end: 'bottom bottom',
-          scrub: 1.1,
-          invalidateOnRefresh: true,
-        },
-      })
-      tl.to({}, { duration: 1 }, 0) // espaçador: trava a duração total em 1
+    // A timeline das legendas nasce só depois da cena, e não em paralelo.
+    //
+    // Ela precisa das JANELAS que a cena calcula: em que trecho do scroll cada
+    // figura está à frente da câmera. Sem isso a única opção era dividir o
+    // percurso em fatias iguais — um quinto por era — e o resultado era o
+    // texto entrando quando a câmera já tinha passado pela foto, apontando
+    // para um ponto atrás do observador.
+    let ctx = null
+    const montarLegendas = (janelas) => {
+      ctx = gsap.context(() => {
+        const tl = gsap.timeline({
+          defaults: { ease: 'none' },
+          scrollTrigger: {
+            trigger: root,
+            start: 'top top',
+            end: 'bottom bottom',
+            scrub: 1.1,
+            invalidateOnRefresh: true,
+          },
+        })
+        // Espaçador: trava a duração total em 1, então posição na timeline
+        // passa a ser progresso de scroll. Sem ele cada tween estica sobre o
+        // percurso inteiro e as cinco legendas terminam aparecendo juntas.
+        tl.to({}, { duration: 1 }, 0)
 
-      const seg = 1 / ENTRIES.length
-      cardsRef.current.filter(Boolean).forEach((card, i) => {
-        const at = i * seg
-        tl.fromTo(
-          card,
-          { autoAlpha: 0, y: 34 },
-          { autoAlpha: 1, y: 0, duration: seg * 0.26, ease: 'power2.out' },
-          at + seg * 0.14
-        )
-        tl.to(
-          card,
-          { autoAlpha: 0, y: -34, duration: seg * 0.22, ease: 'power2.in' },
-          at + seg * 0.72
-        )
-      })
-    }, root)
+        cardsRef.current.filter(Boolean).forEach((card, i) => {
+          const j = janelas[i]
+          if (!j) return
+          const largura = Math.max(j.fim - j.inicio, 0.02)
+          tl.fromTo(
+            card,
+            { autoAlpha: 0, y: 34 },
+            { autoAlpha: 1, y: 0, duration: largura * 0.3, ease: 'power2.out' },
+            j.inicio
+          )
+          tl.to(
+            card,
+            { autoAlpha: 0, y: -34, duration: largura * 0.25, ease: 'power2.in' },
+            j.fim - largura * 0.22
+          )
+        })
+      }, root)
+    }
 
     return () => {
       cancelled = true
       st?.kill()
-      ctx.revert()
+      ctx?.revert()
       road?.dispose()
     }
   }, [reduced])

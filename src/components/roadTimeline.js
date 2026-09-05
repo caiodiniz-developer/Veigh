@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import gsap from 'gsap'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
@@ -785,7 +786,15 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
   scene.add(poeira)
 
   // --- os anos no asfalto ---------------------------------------------------
-  const marcoZ = (i) => -30 - i * ((ROAD_LEN - 70) / entries.length)
+  // Espaçamento dos marcos ao longo da estrada.
+  //
+  // O primeiro marco recuou de 30 para 68. A conta antiga dava ao primeiro ano
+  // só trinta unidades de aproximação (a câmera larga em z=4) contra setenta
+  // das outras eras — e como a legenda agora vive na janela em que a figura
+  // está à frente, a de 2022 aparecia por um piscar e sumia. Com o recuo, as
+  // cinco eras têm aproximação equivalente.
+  const PASSO_MARCO = (ROAD_LEN - 110) / entries.length
+  const marcoZ = (i) => -68 - i * PASSO_MARCO
 
   const yearGeo = new THREE.InstancedBufferGeometry()
   const yearQuad = new THREE.PlaneGeometry(1, 1)
@@ -803,8 +812,11 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
     yPos[i * 3 + 2] = marcoZ(i)
     yCell[i * 2] = (i % COLS) / COLS
     yCell[i * 2 + 1] = 1 - (Math.floor(i / COLS) + 1) / rows
-    ySize[i * 2] = 3.6
-    ySize[i * 2 + 1] = 3.6
+    // Maior que antes (era 3,6). O ano deixou de ser um detalhe pintado no
+    // asfalto e virou o eixo da composição: ele fica no chão exatamente entre
+    // as duas figuras da era, e é ele que amarra o par.
+    ySize[i * 2] = 6.2
+    ySize[i * 2 + 1] = 6.2
   })
   yearGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(yPos, 3))
   yearGeo.setAttribute('aCell', new THREE.InstancedBufferAttribute(yCell, 2))
@@ -899,9 +911,70 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
       sombra.position.set(x, 0.03, z)
       scene.add(sombra)
 
-      figuras.push({ plano, sombra, tex, mat })
+      figuras.push({ plano, sombra, tex, mat, era: i, lado, alt, baseY: alt / 2 })
     })
   })
+
+  // --- o ponteiro sobre as figuras -------------------------------------------
+  //
+  // Passar o mouse numa figura a traz para a frente. Como elas são objetos da
+  // cena e não elementos do DOM, não existe :hover — o que existe é lançar um
+  // raio da câmera pelo ponto do cursor e ver o que ele encontra.
+  //
+  // O crescimento é ancorado na BASE, não no centro. Um plano escalado pelo
+  // centro afunda metade do aumento dentro do chão, e a figura passa a flutuar
+  // ao encolher de volta; subir o centro em proporção mantém os pés no lugar.
+  const raycaster = new THREE.Raycaster()
+  const ponteiro = new THREE.Vector2()
+  let sobre = null
+
+  const destacar = (f, ativo) => {
+    if (!f) return
+    const alvo = ativo ? 1.34 : 1
+    gsap.killTweensOf(f.plano.scale)
+    gsap.to(f.plano.scale, {
+      x: alvo,
+      y: alvo,
+      duration: 0.42,
+      ease: 'power3.out',
+      onUpdate: () => {
+        f.plano.position.y = f.baseY * f.plano.scale.y
+      },
+    })
+    gsap.to(f.sombra.scale, { x: alvo, y: alvo, duration: 0.42, ease: 'power3.out' })
+  }
+
+  const onPointerMove = (e) => {
+    if (!figuras.length) return
+    const r = canvas.getBoundingClientRect()
+    ponteiro.x = ((e.clientX - r.left) / r.width) * 2 - 1
+    ponteiro.y = -((e.clientY - r.top) / r.height) * 2 + 1
+    raycaster.setFromCamera(ponteiro, camera)
+    const hits = raycaster.intersectObjects(figuras.map((f) => f.plano), false)
+    const achou = hits.length ? figuras.find((f) => f.plano === hits[0].object) : null
+    if (achou === sobre) return
+    destacar(sobre, false)
+    sobre = achou
+    destacar(sobre, true)
+    canvas.style.cursor = sobre ? 'pointer' : ''
+    if (!running) render()
+  }
+
+  const onPointerLeave = () => {
+    if (!sobre) return
+    destacar(sobre, false)
+    sobre = null
+    canvas.style.cursor = ''
+    if (!running) render()
+  }
+
+  // Só com ponteiro fino: num toque, "passar o mouse" não existe, e escalar a
+  // figura no primeiro contato seria um efeito sem gesto que o justifique.
+  const temMouse = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+  if (temMouse) {
+    canvas.addEventListener('pointermove', onPointerMove)
+    canvas.addEventListener('pointerleave', onPointerLeave)
+  }
 
   // --- prédios e carros -----------------------------------------------------
   //
@@ -972,7 +1045,7 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
       // o passo era 96 contra 70 dos marcos, os dois ciclos batiam de vez em
       // quando, e o carro aparecia estacionado exatamente onde estão as
       // figuras daquela era.
-      const ENTRE = (ROAD_LEN - 70) / entries.length
+      const ENTRE = PASSO_MARCO
       carros.push({ tipo: 'parado', x: -(ROAD_W / 2 + 1.5), passo: ENTRE, fase: ENTRE * 0.5, giro: 0 })
       carros.push({ tipo: 'parado', x: ROAD_W / 2 + 1.5, passo: ENTRE, fase: ENTRE * 0.5, giro: Math.PI })
     }
@@ -1025,6 +1098,10 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
     new THREE.Color('#0e0a0a'),
   ]
 
+  // Reaproveitado a cada quadro de scroll: alocar um Vector3 por atualização
+  // é lixo garantido no meio de uma animação.
+  const proj = new THREE.Vector3()
+
   const gates = entries.map((_, i) => (i + 0.5) / entries.length)
   const slowdown = makeEasing(gates)
 
@@ -1076,7 +1153,42 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
   window.addEventListener('resize', onResize)
   resize()
 
+  /**
+   * Em que ponto do scroll a câmera está a uma dada distância de um marco.
+   *
+   * A posição da câmera não é linear no progresso — a curva de desaceleração
+   * está no meio — então "quando eu chego no ano 2023" não é uma conta, é uma
+   * busca na tabela que já foi integrada acima.
+   *
+   * Isto existe porque o card de texto e a figura precisavam estar no quadro
+   * ao MESMO tempo, e não estavam: o card entrava numa fatia fixa do scroll
+   * (um quinto por era) enquanto a figura vivia num ponto fixo da estrada. Na
+   * prática, quando o texto aparecia a câmera já tinha passado pela foto, e a
+   * projeção caía atrás do observador.
+   */
+  const tNaDistancia = (era, distancia) => {
+    const zAlvo = marcoZ(era) + 4 + distancia
+    const percorrido = (4 - zAlvo) / (ROAD_LEN - 40)
+    if (percorrido <= 0) return 0
+    if (percorrido >= 1) return 1
+    // A tabela é monótona, então a primeira entrada que alcança o valor é a
+    // resposta; STEPS = 600 dá resolução de sobra para uma animação de scroll.
+    for (let i = 0; i <= STEPS; i++) {
+      if (table[i] >= percorrido) return i / STEPS
+    }
+    return 1
+  }
+
+  // A janela de cada era: começa com a figura ainda longe, à frente, e fecha
+  // pouco antes da câmera emparelhar com ela — passando desse ponto a foto sai
+  // pela borda e o texto ficaria apontando para fora da tela.
+  const janelas = entries.map((_, i) => ({
+    inicio: tNaDistancia(i, 62),
+    fim: tNaDistancia(i, 7),
+  }))
+
   return {
+    janelas,
     start() {
       if (running) return
       running = true
@@ -1117,12 +1229,55 @@ export async function createRoadTimeline(canvas, entries, modelos = {}) {
       dustUniforms.uCamZ.value = camera.position.z
       posicionarCarros(clock)
       render()
-      return { light: `#${light.getHexString()}`, index: i0 }
+      // Onde a legenda de cada era deve ser desenhada.
+      //
+      // O card é HTML por cima do canvas — tipografia nítida em qualquer tela
+      // vale mais do que texto em textura. Mas ele estava ancorado num canto
+      // fixo, longe do assunto. Projetando a figura para coordenadas de tela,
+      // o texto passa a acompanhar quem ele descreve.
+      //
+      // TODAS as eras são projetadas, não só a "corrente". Escolher uma aqui
+      // dentro exigiria repetir a regra que decide qual card está visível — e
+      // quando as duas regras discordaram (uma contava fatias iguais de
+      // scroll, a outra a geometria da estrada) o resultado foi posicionar um
+      // card invisível enquanto o visível ficava parado no canto. Quatro
+      // projeções por quadro não custam nada; duas fontes de verdade custam.
+      //
+      // A figura projetada é a da ESQUERDA e o texto vai à direita dela: é o
+      // lado que sobra livre, já que a outra do par ocupa a direita da pista.
+      const w = canvas.clientWidth || 1
+      const h = canvas.clientHeight || 1
+      const marcas = figuras
+        .filter((f) => f.lado < 0)
+        .map((f) => {
+          proj.setFromMatrixPosition(f.plano.matrixWorld)
+          proj.project(camera)
+          return {
+            era: f.era,
+            x: (proj.x * 0.5 + 0.5) * w,
+            y: (-proj.y * 0.5 + 0.5) * h,
+            // Três condições, e as três importam. z fora de [-1,1] é atrás da
+            // câmera ou além do far. E mesmo à frente, um ponto projetado
+            // longe demais na horizontal levaria o card para fora da tela — o
+            // teto de 0,6 em x garante que sobre largura para o bloco ao lado.
+            dentro:
+              proj.z > -1 &&
+              proj.z < 1 &&
+              proj.x > -1.05 &&
+              proj.x < 0.6 &&
+              proj.y > -0.9 &&
+              proj.y < 0.95,
+          }
+        })
+
+      return { light: `#${light.getHexString()}`, index: i0, marcas }
     },
     dispose() {
       descartado = true
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', onResize)
+      canvas.removeEventListener('pointermove', onPointerMove)
+      canvas.removeEventListener('pointerleave', onPointerLeave)
 
       const limpar = (lista) =>
         lista.forEach((inst) => {

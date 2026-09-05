@@ -45,22 +45,79 @@
 
 /* As legendas ocupam o mesmo lugar, uma de cada vez, na faixa inferior —
    longe do centro, onde a estrada some no horizonte. */
+/* A caixa das legendas cobre o palco inteiro: cada card é posicionado dentro
+   dela por coordenada, calculada a partir de onde a figura daquela era está
+   na tela. */
 .evom-tl__cards {
   position: absolute;
   z-index: 2;
-  left: clamp(20px, 6vw, 96px);
-  right: clamp(20px, 6vw, 96px);
-  bottom: clamp(8vh, 14vh, 18vh);
-  display: grid;
+  inset: 0;
   pointer-events: none;
 }
 
+/* Cada card é ancorado pelo seu canto esquerdo na altura do peito da figura,
+   e cresce para a direita. Os valores de left/top são escritos pelo JS a cada
+   quadro de scroll; os daqui são o repouso, usados quando a figura está fora
+   do quadro. */
 .evom-tl__card {
-  grid-area: 1 / 1;
-  max-width: 44ch;
+  position: absolute;
+  left: clamp(20px, 6vw, 96px);
+  top: auto;
+  bottom: clamp(8vh, 14vh, 18vh);
+  width: min(30ch, 32vw);
+  /* translate desloca o bloco em relação ao ponto projetado: 3,4rem para a
+     direita tira o texto de cima da figura, e -50% na vertical centra o bloco
+     na altura dela em vez de pendurá-lo pelo topo. */
+  translate: 3.4rem -50%;
   opacity: 0;
   visibility: hidden;
   will-change: transform, opacity;
+}
+
+/* O fio-guia.
+   
+   A primeira tentativa foi um painel escuro atrás do texto. Resolvia a
+   legibilidade e custava metade da cena: um retângulo de 330 por 350 pixels
+   cobrindo a rua, o carro e a segunda figura do par. Uma legenda de cena não
+   se defende com uma caixa — ela se defende com contraste no próprio texto e
+   se AMARRA ao assunto com um fio, que é como uma anotação técnica aponta
+   para o que descreve. */
+.evom-tl__card::before {
+  content: '';
+  position: absolute;
+  left: -1.9rem;
+  top: 0.2em;
+  bottom: 0.4em;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    var(--evom-era-light, #c41e3a) 14%,
+    var(--evom-era-light, #c41e3a) 86%,
+    transparent 100%
+  );
+  opacity: 0.85;
+}
+
+/* O braço horizontal do fio, encostando na figura. */
+.evom-tl__card::after {
+  content: '';
+  position: absolute;
+  left: -1.9rem;
+  top: 1.1em;
+  width: 1.1rem;
+  height: 1px;
+  background: var(--evom-era-light, #c41e3a);
+  opacity: 0.85;
+}
+
+/* Sem caixa, o contraste vem do próprio texto. Sombra larga e preta em vez de
+   fundo sólido: ela escurece só o que está imediatamente atrás das letras. */
+.evom-tl__card > * {
+  text-shadow:
+    0 2px 18px rgba(4, 1, 2, 0.98),
+    0 0 46px rgba(4, 1, 2, 0.92),
+    0 0 90px rgba(4, 1, 2, 0.8);
 }
 
 .evom-tl__year {
@@ -116,4 +173,15 @@
 
 .evom-tl.is-static .evom-tl__year {
   color: #c41e3a;
+}
+
+/* No documento de fallback os cards viram itens de lista normais: lá não há
+   cena, logo não há figura para eles acompanharem. */
+.evom-tl__fallback .evom-tl__card,
+.evom-tl.is-static .evom-tl__card {
+  position: static;
+  translate: none;
+  width: auto;
+  opacity: 1;
+  visibility: visible;
 }
